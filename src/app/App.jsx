@@ -767,7 +767,11 @@ export default function App(){
       const { camera, renderer } = eng
       const width = renderer.domElement.clientWidth
       const height = renderer.domElement.clientHeight
-      const statuses = economyRef.current.statuses.filter(status => REVENUE_LABEL_IDS.has(status.id))
+      const statuses = economyRef.current.statuses.filter(status => (
+        REVENUE_LABEL_IDS.has(status.id)
+        && status.active
+        && status.incomePerSec > 0
+      ))
       const labels = []
       for (const status of statuses) {
         const building = buildingsRef.current.find(b => b.uid === status.uid)
