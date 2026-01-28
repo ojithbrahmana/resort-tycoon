@@ -295,7 +295,6 @@ export default function App(){
       if (!eng) return
       const activeVillas = current.statuses.filter(status => VILLA_IDS.has(status.id) && status.active)
       for (const v of activeVillas) {
-        eng.spawnPopup({ text: `+$${v.incomePerSec}`, gx: v.gx, gz: v.gz })
         eng.spawnCoinSparkle({ gx: v.gx, gz: v.gz })
         playSound("coin")
       }
@@ -780,8 +779,8 @@ export default function App(){
           topY = bounds.max.y
           obj.userData.bboxTopY = topY
         }
-        const height = building?.bboxHeight ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
-        const offset = Math.max(1.1, height * 0.35)
+        const buildingHeight = building?.bboxHeight ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
+        const offset = Math.max(0.6, buildingHeight * 0.2)
         tempVec.set(obj.position.x, topY + offset, obj.position.z)
         tempVec.project(camera)
         if (
