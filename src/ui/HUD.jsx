@@ -1,6 +1,6 @@
 import React from "react"
 
-export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, gems, onReopenTutorial }){
+export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial }){
   const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
   return (
     <div className="hud">
@@ -15,7 +15,6 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, g
           </span>
         )}
       </div>
-      <div className="hud-pill">💎 {gems}</div>
       <div className="hud-pill">⭐ {level}</div>
       <div className="hud-pill hud-pill-muted">{xpPct}%</div>
       <button className="hud-pill hud-help" type="button" onClick={onReopenTutorial}>

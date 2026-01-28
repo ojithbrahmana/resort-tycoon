@@ -71,12 +71,12 @@ export class RoadSystem {
     const geometries = createRoadGeometries({ tileSize, thickness: this.thickness })
 
     const baseMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1f2937,
+      color: 0xf3d5a7,
       roughness: 0.85,
       metalness: 0.05,
     })
     const outlineMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
+      color: 0xe6c293,
       roughness: 0.9,
       metalness: 0.05,
     })
@@ -204,8 +204,8 @@ export class RoadSystem {
     const matrix = new THREE.Matrix4().compose(position, quat, scaleVec)
     this.meshes[type].setMatrixAt(index, matrix)
 
-    const outlinePosition = new THREE.Vector3(x, this.y - 0.03, z)
-    const outlineScale = scale * 1.04
+    const outlinePosition = new THREE.Vector3(x, this.y - 0.05, z)
+    const outlineScale = scale * 1.0
     const outlineMatrix = new THREE.Matrix4().compose(
       outlinePosition,
       quat,

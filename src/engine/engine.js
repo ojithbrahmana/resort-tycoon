@@ -2,7 +2,7 @@ import * as THREE from "three"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
-import { ISLAND_RADIUS, GRID_HALF } from "../game/constants"
+import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
@@ -82,24 +82,64 @@ export function createEngine({ container }){
     return hits[0].point
   }
 
-  function ensureGhost(spriteUrl){
-    if(ghost) return
-    ghost = makeBillboardSprite(spriteUrl, 3.6)
-    ghost.material.opacity = 0.7
+  function createFootprintOutline({ w, h }) {
+    const width = GRID_SIZE * w
+    const height = GRID_SIZE * h
+    const geometry = new THREE.PlaneGeometry(width, height)
+    const edges = new THREE.EdgesGeometry(geometry)
+    const material = new THREE.LineBasicMaterial({ color: 0x22c55e })
+    const outline = new THREE.LineSegments(edges, material)
+    outline.rotation.x = -Math.PI / 2
+    outline.position.y = groundY + 0.12
+    outline.userData.footprint = { w, h }
+    return outline
+  }
+
+  function ensureGhost({ footprint }){
+    const nextFootprint = footprint ?? { w: 1, h: 1 }
+    if (ghost) {
+      const { w, h } = ghost.userData.footprint ?? { w: 1, h: 1 }
+      if (w === nextFootprint.w && h === nextFootprint.h) return
+      buildGroup.remove(ghost)
+      ghost = null
+    }
+    ghost = createFootprintOutline(nextFootprint)
     buildGroup.add(ghost)
   }
 
-  function handleMouseMove(e, { spriteUrl, occupiedKeys }){
+  function getFootprintCells(gx, gz, footprint) {
+    const { w = 1, h = 1 } = footprint ?? {}
+    const cells = []
+    for (let dx = 0; dx < w; dx += 1) {
+      for (let dz = 0; dz < h; dz += 1) {
+        cells.push({ gx: gx + dx, gz: gz + dz })
+      }
+    }
+    return cells
+  }
+
+  function handleMouseMove(e, { footprint, occupiedKeys }){
     const p = pickIsland(e.clientX, e.clientY)
     if(!p){ removeGhost(); onHover?.(null); return }
     const { gx, gz } = worldToGrid(p.x, p.z)
-    const { x, z } = gridToWorld(gx,gz)
+    const cells = getFootprintCells(gx, gz, footprint)
+    const ok = cells.every(cell => {
+      const { x, z } = gridToWorld(cell.gx, cell.gz)
+      return withinIsland(x, z)
+        && isWithinGrid(cell.gx, cell.gz)
+        && !occupiedKeys.has(key(cell.gx, cell.gz))
+    })
 
-    const ok = withinIsland(x,z) && isWithinGrid(gx,gz) && !occupiedKeys.has(key(gx,gz))
-    ensureGhost(spriteUrl)
-    ghost.position.set(x, 4.2, z)
+    const { w = 1, h = 1 } = footprint ?? {}
+    const center = {
+      gx: gx + (w - 1) / 2,
+      gz: gz + (h - 1) / 2,
+    }
+    const { x, z } = gridToWorld(center.gx, center.gz)
+    ensureGhost({ footprint: { w, h } })
+    ghost.position.set(x, groundY + 0.2, z)
     ghost.material.color.setHex(ok ? 0x22c55e : 0xef4444)
-    ghost.userData = { gx, gz, ok }
+    ghost.userData = { ...ghost.userData, gx, gz, ok }
     onHover?.({ gx, gz, ok })
   }
 

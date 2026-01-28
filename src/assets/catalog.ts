@@ -75,7 +75,7 @@ export const CATALOG: BuildingCatalogItem[] = [
     requiresRoad: false,
     requiresPower: false,
     incomePerSec: 0,
-    modelPath: "/models/palm.glb",
+    modelPath: "/models/palm.final.glb",
     spritePath: "/sprites/villa.png",
     iconPath: "/sprites/villa.png",
     unlockLevel: 1,

@@ -5,10 +5,14 @@ import { makeBillboardSprite } from "../engine/sprites.js"
 import { GRID_SIZE } from "./constants"
 
 const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.url).toString()
+const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 let villaModel = null
 let villaModelPromise = null
 let villaScaleFactor = 1
+let palmModel = null
+let palmModelPromise = null
+let palmScaleFactor = 1
 
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
@@ -40,7 +44,7 @@ function loadVillaModel() {
 }
 
 export function preloadBuildingModels() {
-  return loadVillaModel()
+  return Promise.all([loadVillaModel(), loadPalmModel()])
 }
 
 function createContactShadow(radius) {
@@ -143,28 +147,49 @@ function createGeneratorMesh() {
   return group
 }
 
-function createPalmMesh() {
-  const group = new THREE.Group()
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0xcaa472, roughness: 0.8 })
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 })
+function loadPalmModel() {
+  if (palmModelPromise) return palmModelPromise
 
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 3.6, 8), trunkMat)
-  trunk.position.y = 1.8
-  trunk.castShadow = true
-  trunk.receiveShadow = true
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
 
-  const leaves = new THREE.Group()
-  for (let i = 0; i < 4; i += 1) {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.4, 6), leafMat)
-    leaf.position.set(Math.cos((Math.PI / 2) * i) * 0.6, 3.6, Math.sin((Math.PI / 2) * i) * 0.6)
-    leaf.rotation.x = Math.PI / 2
-    leaf.rotation.z = (Math.PI / 2) * i
-    leaf.castShadow = true
-    leaves.add(leaf)
+  palmModelPromise = loader.loadAsync(PALM_MODEL_URL).then((gltf) => {
+    palmModel = gltf.scene
+    palmModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    palmModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(palmModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 2
+    palmScaleFactor = targetFootprint / footprint
+    return palmModel
+  })
+
+  return palmModelPromise
+}
+
+async function createPalmModel() {
+  const model = await loadPalmModel()
+  if (!model) {
+    return new THREE.Group()
   }
-
+  const clone = model.clone(true)
+  clone.scale.setScalar(palmScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset
+  const group = new THREE.Group()
   group.add(createContactShadow(1.1))
-  group.add(trunk, leaves)
+  group.add(clone)
   return group
 }
 
@@ -177,7 +202,8 @@ export async function createBuildingObject({ building, spritePath, size = 3.6 })
     return { object: createGeneratorMesh(), isModel: true }
   }
   if (building?.id === "palm") {
-    return { object: createPalmMesh(), isModel: true }
+    const object = await createPalmModel()
+    return { object, isModel: true }
   }
 
   return { object: makeBillboardSprite(spritePath, size), isModel: false }
