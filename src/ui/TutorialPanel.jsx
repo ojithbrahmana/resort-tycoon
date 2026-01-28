@@ -1,10 +1,13 @@
 import React from "react"
 
-export default function TutorialPanel({ tutorial, onNext, nextJiggle }){
+export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose }){
   return (
     <div className="panel guide">
       <div className="avatar">🐧</div>
       <div className="bubble">
+        <button className="guide-close" type="button" onClick={onClose} aria-label="Close tutorial">
+          ✕
+        </button>
         <div style={{ fontWeight: 900, fontFamily: "var(--font-display)" }}>{tutorial.message}</div>
         <div className="checklist">
           {tutorial.steps.map((step, i) => (
