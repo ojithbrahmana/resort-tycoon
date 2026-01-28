@@ -52,8 +52,8 @@ export function createEngine({ container }){
     pending: [],
   }
   const npcTargetCount = 8
-  const npcMinDistance = 0.6
-  const npcNeighborRadius = 1.2
+  const npcMinDistance = GRID_SIZE * 1.6
+  const npcNeighborRadius = GRID_SIZE * 2.2
 
   loadNpcModel().then(({ scene: npcTemplateScene, clips: npcClips, scale }) => {
     npcState.templateScene = npcTemplateScene

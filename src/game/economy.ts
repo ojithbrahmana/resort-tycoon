@@ -38,7 +38,7 @@ export function computeEconomy({ buildings, catalogById }: { buildings: Building
   for (const b of buildings) {
     const item = catalogById[b.id]
     if (!item) continue
-    if (item.incomePerSec <= 0) continue
+    if (item.incomePerSec <= 0 && item.id !== "generator") continue
 
     // Game rule: buildings only earn if powered (if required).
     const roadOk = true
