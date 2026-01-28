@@ -8,6 +8,7 @@ import { CATALOG, CATEGORIES } from "../assets/catalog"
 import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, ISLAND_RADIUS } from "../game/constants"
 import { playSound } from "../game/sound"
 import { findPath, findRoadAnchor } from "../game/guests"
+import splashImage from "../assets/ui/splash.png"
 import HUD from "../ui/HUD.jsx"
 import ModeBar from "../ui/ModeBar.jsx"
 import BuildShop from "../ui/BuildShop.jsx"
@@ -57,23 +58,45 @@ export default function App(){
   const [toast, setToast] = useState(null)
   const [levelUp, setLevelUp] = useState(null)
   const [confetti, setConfetti] = useState([])
+  const [splashPhase, setSplashPhase] = useState("show")
   const [nextJiggle, setNextJiggle] = useState(false)
   const [progression, setProgression] = useState(createProgressionState())
   const [tutorialVisible, setTutorialVisible] = useState(true)
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
+  const splashRef = useRef("show")
 
   toolRef.current = tool
   modeRef.current = mode
   buildingsRef.current = buildings
   moneyRef.current = money
   levelRef.current = progression.level
+  splashRef.current = splashPhase
 
   useEffect(() => {
     const s = new Set()
-    for (const b of buildings) s.add(key(b.gx, b.gz))
+    for (const b of buildings) {
+      const item = catalogById[b.id]
+      const cells = getFootprintCells({ gx: b.gx, gz: b.gz }, item?.footprint)
+      for (const cell of cells) {
+        s.add(key(cell.gx, cell.gz))
+      }
+    }
     occupiedRef.current = s
   }, [buildings])
+
+  useEffect(() => {
+    const splashTimer = window.setTimeout(() => {
+      setSplashPhase("fade")
+    }, 3000)
+    const removeTimer = window.setTimeout(() => {
+      setSplashPhase("done")
+    }, 3300)
+    return () => {
+      window.clearTimeout(splashTimer)
+      window.clearTimeout(removeTimer)
+    }
+  }, [])
 
   const economy = useMemo(()=> computeEconomy({ buildings, catalogById }), [buildings])
   economyRef.current = economy
@@ -150,6 +173,8 @@ export default function App(){
     const onMove = (e) => {
       const current = engineRef.current
       if (!current) return
+      if (splashRef.current !== "done") return
+      if (!isCanvasEvent(e)) return
       if (modeRef.current !== "build") return
       const item = catalogById[toolRef.current]
       current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupiedRef.current })
@@ -157,6 +182,8 @@ export default function App(){
     const onMouseDown = (e) => {
       const current = engineRef.current
       if (!current) return
+      if (splashRef.current !== "done") return
+      if (!isCanvasEvent(e)) return
       if (modeRef.current !== "build") return
       const item = catalogById[toolRef.current]
       if (item?.id === "road") {
@@ -194,11 +221,16 @@ export default function App(){
   }, [viewportRef])
 
   useEffect(() => {
+    engineRef.current?.setInputLocked(splashPhase !== "done")
+  }, [splashPhase])
+
+  useEffect(() => {
     const eng = engineRef.current
     if (!eng) return
     economy.statuses.forEach(status => {
       if (!VILLA_IDS.has(status.id)) return
-      eng.updateVillaStatus(status)
+      const item = catalogById[status.id]
+      eng.updateVillaStatus({ ...status, footprint: item?.footprint })
     })
   }, [economy.statuses])
 
@@ -308,6 +340,14 @@ export default function App(){
     engineRef.current?.setMode(next)
   }
 
+  function isCanvasEvent(event){
+    if (!viewportRef.current) return false
+    if (!event?.target) return false
+    if (!viewportRef.current.contains(event.target)) return false
+    if (event.target.closest?.(".ui")) return false
+    return true
+  }
+
   function withinIsland(gx, gz){
     const { x, z } = gridToWorld(gx, gz)
     return Math.sqrt(x * x + z * z) <= (ISLAND_RADIUS - 3)
@@ -318,11 +358,14 @@ export default function App(){
   }
 
   function validatePlacement({ item, gx, gz }){
-    if (!isWithinGrid(gx, gz) || !withinIsland(gx, gz)) {
-      return "Can't build there."
-    }
-    if (occupiedRef.current.has(key(gx, gz))) {
-      return "Tile already occupied."
+    const cells = getFootprintCells({ gx, gz }, item?.footprint)
+    for (const cell of cells) {
+      if (!isWithinGrid(cell.gx, cell.gz) || !withinIsland(cell.gx, cell.gz)) {
+        return "Can't build there."
+      }
+      if (occupiedRef.current.has(key(cell.gx, cell.gz))) {
+        return "Tile already occupied."
+      }
     }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
@@ -343,7 +386,10 @@ export default function App(){
     const uid = createUid(item.id)
     const entry = { uid, id: item.id, gx, gz, cost: item.cost, object: null }
     setBuildings(prev => [...prev, entry])
-    occupiedRef.current.add(key(gx, gz))
+    const occupiedCells = getFootprintCells({ gx, gz }, item?.footprint)
+    for (const cell of occupiedCells) {
+      occupiedRef.current.add(key(cell.gx, cell.gz))
+    }
     moneyRef.current -= item.cost
     setMoney(prev => prev - item.cost)
     addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
@@ -379,6 +425,17 @@ export default function App(){
     return []
   }
 
+  function getFootprintCells({ gx, gz }, footprint){
+    const { w = 1, h = 1 } = footprint ?? {}
+    const cells = []
+    for (let dx = 0; dx < w; dx += 1) {
+      for (let dz = 0; dz < h; dz += 1) {
+        cells.push({ gx: gx + dx, gz: gz + dz })
+      }
+    }
+    return cells
+  }
+
   function handleDragPlacement({ gx, gz }){
     const drag = dragRef.current
     if (!drag.active || !drag.start) return
@@ -409,9 +466,17 @@ export default function App(){
   const moneyDisplayState = { value: moneyDisplay.toLocaleString(), bump: moneyBump }
   const incomeDisplayState = { value: economy.total, deltaText: incomeDeltaText }
 
+  const splashVisible = splashPhase !== "done"
+
   return (
     <>
       <div ref={viewportRef} style={{ position: "fixed", inset: 0 }} />
+
+      {splashVisible && (
+        <div className={`splash-screen ${splashPhase === "fade" ? "fade-out" : ""}`}>
+          <img src={splashImage} alt="Resort Tycoon" />
+        </div>
+      )}
 
       <div className="ui">
         <HUD
@@ -441,7 +506,10 @@ export default function App(){
         />
 
         {toast?.message && (
-          <div className={`panel toast show ${toast.tone === "error" ? "error" : ""}`}>
+          <div
+            className={`panel toast show ${toast.tone === "error" ? "error" : ""}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             {toast.message}
           </div>
         )}

@@ -10,6 +10,8 @@ export function createCamera(width,height){
 export function attachCameraControls({ dom, camera }){
   // lightweight orbit + pan + zoom
   let isRot=false, isPan=false
+  let pointerDown=false
+  let enabled=true
   let lastX=0,lastY=0
   const target = new THREE.Vector3(0,0,0)
   let radius = 180
@@ -25,13 +27,30 @@ export function attachCameraControls({ dom, camera }){
   }
   update()
 
+  function setEnabled(next){
+    enabled = next
+    if (!enabled) {
+      isRot = false
+      isPan = false
+      pointerDown = false
+    }
+  }
+
   dom.addEventListener("contextmenu", e => e.preventDefault())
+  dom.addEventListener("pointerdown", (e) => {
+    if (!enabled) return
+    pointerDown = true
+    lastX = e.clientX
+    lastY = e.clientY
+  })
   dom.addEventListener("mousedown", (e)=>{
+    if (!enabled) return
     if(e.button===2){ isRot=true; lastX=e.clientX; lastY=e.clientY }
     if(e.button===1){ isPan=true; lastX=e.clientX; lastY=e.clientY }
   })
-  window.addEventListener("mouseup", ()=>{ isRot=false; isPan=false })
+  window.addEventListener("pointerup", ()=>{ isRot=false; isPan=false; pointerDown=false })
   window.addEventListener("mousemove", (e)=>{
+    if (!enabled) return
     const dx = e.clientX-lastX
     const dy = e.clientY-lastY
     if(isRot){
@@ -51,9 +70,10 @@ export function attachCameraControls({ dom, camera }){
     lastX=e.clientX; lastY=e.clientY
   })
   dom.addEventListener("wheel",(e)=>{
+    if (!enabled || !pointerDown) return
     radius = Math.max(60, Math.min(360, radius + e.deltaY*0.15))
     update()
   }, { passive:true })
 
-  return { update }
+  return { update, setEnabled }
 }

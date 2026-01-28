@@ -2,7 +2,7 @@ import React from "react"
 
 export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose }){
   return (
-    <div className="panel guide">
+    <div className="panel guide" onMouseDown={(event) => event.stopPropagation()}>
       <div className="avatar">🐧</div>
       <div className="bubble">
         <button className="guide-close" type="button" onClick={onClose} aria-label="Close tutorial">
