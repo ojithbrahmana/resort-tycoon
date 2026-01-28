@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { BufferGeometryUtils } from "three/examples/jsm/utils/BufferGeometryUtils.js"
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js"
 import { GRID_HALF, GRID_SIZE } from "../game/constants"
 import { gridToWorld, key } from "./grid"
 
@@ -51,17 +51,17 @@ function createRoadGeometries({ tileSize, roadWidth, radius, thickness }) {
   })
   endCap.translate(0, 0, tileSize / 4)
 
-  const corner = BufferGeometryUtils.mergeGeometries([
+  const corner = mergeGeometries([
     endCap,
     endCap.clone().rotateY(Math.PI / 2),
   ])
 
-  const tee = BufferGeometryUtils.mergeGeometries([
+  const tee = mergeGeometries([
     straight.clone().rotateY(Math.PI / 2),
     endCap.clone(),
   ])
 
-  const cross = BufferGeometryUtils.mergeGeometries([
+  const cross = mergeGeometries([
     straight,
     straight.clone().rotateY(Math.PI / 2),
   ])
