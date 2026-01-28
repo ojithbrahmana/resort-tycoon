@@ -2,12 +2,13 @@ import * as THREE from "three"
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
-import { worldToGrid, gridToWorld, key, neighbors4 } from "./grid.js"
+import { worldToGrid, gridToWorld, key } from "./grid.js"
 import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
 import { loadNpcModel } from "./npcLoader.js"
+import { findPath } from "../game/guests"
 
 const skeletonClone = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone
 const npcClone = skeletonClone || ((source) => source.clone(true))
@@ -51,8 +52,8 @@ export function createEngine({ container }){
     pending: [],
   }
   const npcTargetCount = 8
-  const npcMinDistance = GRID_SIZE * 1.6
-  const npcNeighborRadius = GRID_SIZE * 2
+  const npcMinDistance = 0.6
+  const npcNeighborRadius = 1.2
 
   loadNpcModel().then(({ scene: npcTemplateScene, clips: npcClips, scale }) => {
     npcState.templateScene = npcTemplateScene
@@ -67,6 +68,7 @@ export function createEngine({ container }){
   })
 
   let ghost = null
+  let selectionOutline = null
   let mode = "build"
   let selectedTool = "villa"
   let onPlace = null
@@ -104,6 +106,13 @@ export function createEngine({ container }){
     }
   }
 
+  function clearSelectionOutline(){
+    if (selectionOutline) {
+      buildGroup.remove(selectionOutline)
+      selectionOutline = null
+    }
+  }
+
   function withinIsland(x,z){
     return Math.sqrt(x*x + z*z) <= (ISLAND_RADIUS - 3)
   }
@@ -122,12 +131,12 @@ export function createEngine({ container }){
     return hits[0].point
   }
 
-  function createFootprintOutline({ w, h }) {
+  function createFootprintOutline({ w, h, color = 0x22c55e }) {
     const width = GRID_SIZE * w
     const height = GRID_SIZE * h
     const geometry = new THREE.PlaneGeometry(width, height)
     const edges = new THREE.EdgesGeometry(geometry)
-    const material = new THREE.LineBasicMaterial({ color: 0x22c55e })
+    const material = new THREE.LineBasicMaterial({ color })
     const outline = new THREE.LineSegments(edges, material)
     outline.rotation.x = -Math.PI / 2
     outline.position.y = groundY + 0.12
@@ -145,6 +154,25 @@ export function createEngine({ container }){
     }
     ghost = createFootprintOutline(nextFootprint)
     buildGroup.add(ghost)
+  }
+
+  function setSelectionOutline({ gx, gz, footprint }){
+    const nextFootprint = footprint ?? { w: 1, h: 1 }
+    if (selectionOutline) {
+      const { w, h } = selectionOutline.userData.footprint ?? { w: 1, h: 1 }
+      if (w !== nextFootprint.w || h !== nextFootprint.h) {
+        buildGroup.remove(selectionOutline)
+        selectionOutline = null
+      }
+    }
+    if (!selectionOutline) {
+      selectionOutline = createFootprintOutline({ ...nextFootprint, color: 0xf59e0b })
+      buildGroup.add(selectionOutline)
+    }
+    const { x, z } = getFootprintCenter({ gx, gz }, nextFootprint)
+    selectionOutline.position.set(x, groundY + 0.22, z)
+    selectionOutline.material.color.setHex(0xf59e0b)
+    selectionOutline.userData = { ...selectionOutline.userData, gx, gz, footprint: nextFootprint }
   }
 
   function getFootprintCells(gx, gz, footprint) {
@@ -361,15 +389,30 @@ export function createEngine({ container }){
   function applyNpcClip(npc, clip) {
     if (!clip) return
     if (npc.action) {
-      npc.action.stop()
+      npc.action.fadeOut(0.2)
     }
     const action = npc.mixer.clipAction(clip)
     const speed = 0.9 + Math.random() * 0.25
     action.timeScale = speed
+    action.reset()
     action.time = Math.random() * Math.max(clip.duration, 0.1)
-    action.play()
+    action.fadeIn(0.2).play()
     npc.action = action
     npc.currentClipName = clip.name
+  }
+
+  function ensureNpcClipVariety(npc, tags) {
+    const nearby = getNearbyClipNames(npc.object.position, npcNeighborRadius, npc)
+    if (!npc.currentClipName || !nearby.has(npc.currentClipName)) return
+    const nextClip = pickNpcClip({ position: npc.object.position, tags, ignoreNpc: npc })
+    if (nextClip && nextClip.name !== npc.currentClipName) {
+      applyNpcClip(npc, nextClip)
+      if (tags.includes("idle") || tags.includes("stand")) {
+        npc.idleClip = nextClip
+      } else {
+        npc.moveClip = nextClip
+      }
+    }
   }
 
   function isPositionSpaced(position, ignoreNpc) {
@@ -405,29 +448,31 @@ export function createEngine({ container }){
     npcRoot.scale.setScalar(npcState.scale)
     npcRoot.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(npcRoot)
-    const yOffset = -bounds.min.y
+    const yOffset = -bounds.min.y + 0.02
     npcRoot.position.y += yOffset
     const group = new THREE.Group()
     group.add(npcRoot)
     return { group, npcRoot }
   }
 
-  function pickNextRoadCell(npc) {
-    const options = neighbors4(npc.currentCell.gx, npc.currentCell.gz)
-      .filter(cell => roadSystem.hasRoad(cell.gx, cell.gz))
-      .filter(cell => {
-        if (!npc.lastCell) return true
-        return !(cell.gx === npc.lastCell.gx && cell.gz === npc.lastCell.gz)
-      })
+  function buildRoadsSet() {
+    const roadCells = roadSystem.getRoadCells()
+    const roadsSet = new Set(roadCells.map(cell => key(cell.gx, cell.gz)))
+    return { roadCells, roadsSet }
+  }
 
-    const viable = options.filter(cell => {
-      const position = gridToWorld(cell.gx, cell.gz)
-      return isPositionSpaced(position, npc)
-    })
-
-    const candidates = viable.length ? viable : options
-    if (!candidates.length) return null
-    return candidates[Math.floor(Math.random() * candidates.length)]
+  function findNpcPath(npc, preferredPath) {
+    if (preferredPath?.length > 1) return preferredPath
+    const { roadCells, roadsSet } = buildRoadsSet()
+    if (!roadCells.length) return null
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const cell = roadCells[Math.floor(Math.random() * roadCells.length)]
+      if (cell.gx === npc.currentCell.gx && cell.gz === npc.currentCell.gz) continue
+      if (!isPositionSpaced(gridToWorld(cell.gx, cell.gz), npc)) continue
+      const path = findPath({ start: npc.currentCell, goal: cell, roadsSet })
+      if (path && path.length > 1) return path
+    }
+    return null
   }
 
   function spawnGuest({ path } = {}){
@@ -445,10 +490,10 @@ export function createEngine({ container }){
 
     const { group, npcRoot } = instance
     const worldPos = gridToWorld(startCell.gx, startCell.gz)
-    group.position.set(worldPos.x, groundY, worldPos.z)
+    group.position.set(worldPos.x, groundY + 0.15, worldPos.z)
 
     const mixer = new THREE.AnimationMixer(npcRoot)
-    const moveClip = pickNpcClip({ position: group.position, tags: ["walk", "run", "confident"] })
+    const moveClip = pickNpcClip({ position: group.position, tags: ["walk", "run", "stylish", "confident"] })
     const idleClip = pickNpcClip({ position: group.position, tags: ["idle", "stand"] })
     const primaryClip = moveClip || idleClip || npcState.clips[0]
 
@@ -461,14 +506,19 @@ export function createEngine({ container }){
       currentCell: { ...startCell },
       lastCell: null,
       targetCell: null,
+      path: null,
+      pathIndex: 0,
       speed: 1.6 + Math.random() * 0.6,
       idleClip,
       moveClip: moveClip || primaryClip,
       idleTimer: 0,
     }
     applyNpcClip(npc, primaryClip)
-    npc.targetCell = pickNextRoadCell(npc)
-    if (!npc.targetCell) {
+    npc.path = findNpcPath(npc, path)
+    if (npc.path) {
+      npc.pathIndex = 1
+      npc.targetCell = npc.path[npc.pathIndex] || null
+    } else {
       npc.idleTimer = 0.6 + Math.random() * 0.8
       if (npc.idleClip) {
         applyNpcClip(npc, npc.idleClip)
@@ -554,14 +604,26 @@ export function createEngine({ container }){
       const npc = npcs[i]
       npc.mixer.update(delta)
 
+      let minNeighborDist = Infinity
+      for (const other of npcs) {
+        if (other === npc) continue
+        const dx = other.object.position.x - npc.object.position.x
+        const dz = other.object.position.z - npc.object.position.z
+        const dist = Math.hypot(dx, dz)
+        if (dist < minNeighborDist) minNeighborDist = dist
+      }
+      const separationScale = minNeighborDist < npcMinDistance ? 0.2 : 1
+
       if (!npc.targetCell) {
         npc.idleTimer -= delta
         if (npc.idleTimer <= 0) {
-          npc.targetCell = pickNextRoadCell(npc)
-          if (npc.targetCell) {
+          npc.path = findNpcPath(npc)
+          if (npc.path) {
+            npc.pathIndex = 1
+            npc.targetCell = npc.path[npc.pathIndex] || null
             const moveClip = pickNpcClip({
               position: npc.object.position,
-              tags: ["walk", "run", "confident"],
+              tags: ["walk", "run", "stylish", "confident"],
               ignoreNpc: npc,
             })
             if (moveClip) npc.moveClip = moveClip
@@ -572,9 +634,11 @@ export function createEngine({ container }){
             npc.idleTimer = 0.8 + Math.random() * 0.8
           }
         }
+        ensureNpcClipVariety(npc, ["idle", "stand"])
         continue
       }
 
+      ensureNpcClipVariety(npc, ["walk", "run", "stylish", "confident"])
       const target = gridToWorld(npc.targetCell.gx, npc.targetCell.gz)
       const dx = target.x - npc.object.position.x
       const dz = target.z - npc.object.position.z
@@ -582,8 +646,10 @@ export function createEngine({ container }){
       if (dist < 0.15) {
         npc.lastCell = npc.currentCell
         npc.currentCell = npc.targetCell
-        npc.targetCell = pickNextRoadCell(npc)
-        if (!npc.targetCell) {
+        npc.pathIndex += 1
+        if (!npc.path || npc.pathIndex >= npc.path.length) {
+          npc.targetCell = null
+          npc.path = null
           npc.idleTimer = 0.8 + Math.random() * 0.8
           if (npc.idleClip) {
             const idleClip = pickNpcClip({
@@ -594,11 +660,13 @@ export function createEngine({ container }){
             npc.idleClip = idleClip || npc.idleClip
             applyNpcClip(npc, npc.idleClip)
           }
+        } else {
+          npc.targetCell = npc.path[npc.pathIndex]
         }
       } else {
         npc.object.rotation.y = Math.atan2(dx, dz)
-        npc.object.position.x += (dx / dist) * npc.speed * delta
-        npc.object.position.z += (dz / dist) * npc.speed * delta
+        npc.object.position.x += (dx / dist) * npc.speed * separationScale * delta
+        npc.object.position.z += (dz / dist) * npc.speed * separationScale * delta
       }
     }
   }
@@ -621,6 +689,21 @@ export function createEngine({ container }){
   }
   tick()
 
+  function resetWorld(){
+    removeGhost()
+    clearSelectionOutline()
+    for (const child of [...buildGroup.children]) {
+      buildGroup.remove(child)
+    }
+    popups.length = 0
+    sparkles.length = 0
+    placementBounces.length = 0
+    npcs.length = 0
+    villaStatus.clear()
+    roadSystem.clear()
+    npcSpawnTimer = 0
+  }
+
   return {
     renderer,
     scene,
@@ -631,6 +714,9 @@ export function createEngine({ container }){
     setTool,
     setHandlers,
     setInputLocked,
+    clearGhost: removeGhost,
+    setSelectionOutline,
+    clearSelectionOutline,
     pickIsland,
     handleMouseMove,
     handleClick,
@@ -642,5 +728,6 @@ export function createEngine({ container }){
     spawnGuest,
     shakeCamera,
     getGuestCount: () => npcs.length,
+    resetWorld,
   }
 }

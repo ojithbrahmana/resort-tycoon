@@ -1,9 +1,14 @@
 import React from "react"
 
-export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial }){
+const stopUiEvent = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan }){
   const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
   return (
-    <div className="hud" onMouseDown={(event) => event.stopPropagation()}>
+    <div id="hud" className="hud" onMouseDown={stopUiEvent}>
       <div className={`hud-pill ${money.bump ? "bump" : ""}`}>
         🪙 ${money.value}
       </div>
@@ -17,7 +22,26 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
       </div>
       <div className="hud-pill">LEVEL ⭐{level}</div>
       <div className="hud-pill hud-pill-muted">{xpPct}%</div>
-      <button className="hud-pill hud-help" type="button" onClick={onReopenTutorial}>
+      <button
+        className="hud-pill hud-loan"
+        type="button"
+        onMouseDown={stopUiEvent}
+        onClick={(event) => {
+          stopUiEvent(event)
+          onOpenLoan?.()
+        }}
+      >
+        💰 <span>Loan</span>
+      </button>
+      <button
+        className="hud-pill hud-help"
+        type="button"
+        onMouseDown={stopUiEvent}
+        onClick={(event) => {
+          stopUiEvent(event)
+          onReopenTutorial?.()
+        }}
+      >
         ❔ <span>Re-open tutorial</span>
       </button>
     </div>
