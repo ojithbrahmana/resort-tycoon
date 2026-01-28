@@ -1,5 +1,38 @@
 import * as THREE from "three"
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
 import { makeBillboardSprite } from "../engine/sprites.js"
+
+const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.url).toString()
+const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
+let villaModel = null
+let villaModelPromise = null
+
+function loadVillaModel() {
+  if (villaModelPromise) return villaModelPromise
+
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+
+  villaModelPromise = loader.loadAsync(VILLA_MODEL_URL).then((gltf) => {
+    villaModel = gltf.scene
+    villaModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    return villaModel
+  })
+
+  return villaModelPromise
+}
+
+export function preloadBuildingModels() {
+  return loadVillaModel()
+}
 
 function createContactShadow(radius) {
   const geo = new THREE.CircleGeometry(radius, 24)
@@ -47,6 +80,18 @@ function createVillaMesh({ upgraded = false }) {
 
   group.add(createContactShadow(1.6))
   group.add(base, trim, roof)
+  return group
+}
+
+async function createVillaModel() {
+  const model = await loadVillaModel()
+  if (!model) {
+    return createVillaMesh({ upgraded: false })
+  }
+  const clone = model.clone(true)
+  const group = new THREE.Group()
+  group.add(createContactShadow(1.6))
+  group.add(clone)
   return group
 }
 
@@ -111,7 +156,8 @@ function createPalmMesh() {
 
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa" || building?.id === "villa_plus") {
-    return { object: createVillaMesh({ upgraded: building.id === "villa_plus" }), isModel: true }
+    const object = await createVillaModel()
+    return { object, isModel: true }
   }
   if (building?.id === "generator") {
     return { object: createGeneratorMesh(), isModel: true }
