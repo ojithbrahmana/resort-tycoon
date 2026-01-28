@@ -1,29 +1,63 @@
 import React, { useState } from "react"
 
-export default function BuildShop({ items, categories, selectedCategory, onSelectCategory, selectedTool, onSelectTool, level, hidden, onClose }){
+const stopUiEvent = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+export default function BuildShop({
+  items,
+  categories,
+  selectedCategory,
+  onSelectCategory,
+  selectedTool,
+  onSelectTool,
+  level,
+  hidden,
+  onClose,
+  progressionLocked,
+  progressionAllowedIds,
+}){
   const visibleItems = items.filter(item => selectedCategory === "All" ? true : item.category === selectedCategory)
   const [jiggleId, setJiggleId] = useState(null)
 
   return (
     <div
+      id="buildShop"
       className={`panel drawer ${hidden ? "hidden" : ""}`}
-      onMouseDown={(event) => event.stopPropagation()}
+      onMouseDown={stopUiEvent}
     >
       <header>
         {onClose && (
-          <button className="drawer-close" type="button" onClick={onClose} aria-label="Close build shop">
+          <button
+            className="drawer-close"
+            type="button"
+            onMouseDown={stopUiEvent}
+            onClick={(event) => {
+              stopUiEvent(event)
+              onClose()
+            }}
+            aria-label="Close build shop"
+          >
             ✕
           </button>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--font-display)" }}>Build Shop</div>
-          <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.7 }}>Tap island to place</div>
         </div>
       </header>
 
       <div className="chips">
         {categories.map(c => (
-          <button key={c} className={`chip ${selectedCategory === c ? "active" : ""}`} onClick={() => onSelectCategory(c)}>
+          <button
+            key={c}
+            className={`chip ${selectedCategory === c ? "active" : ""}`}
+            onMouseDown={stopUiEvent}
+            onClick={(event) => {
+              stopUiEvent(event)
+              onSelectCategory(c)
+            }}
+          >
             {c}
           </button>
         ))}
@@ -31,12 +65,15 @@ export default function BuildShop({ items, categories, selectedCategory, onSelec
 
       <div className="grid">
         {visibleItems.map(item => {
-          const locked = level < item.unlockLevel
+          const gated = progressionLocked && !progressionAllowedIds?.has(item.id)
+          const locked = gated || level < item.unlockLevel
           return (
             <button
               key={item.id}
               className={`card ${selectedTool === item.id ? "active" : ""} ${locked ? "locked" : ""} ${jiggleId === item.id ? "jiggle" : ""}`}
-              onClick={() => {
+              onMouseDown={stopUiEvent}
+              onClick={(event) => {
+                stopUiEvent(event)
                 if (locked) return
                 onSelectTool(item.id)
                 setJiggleId(item.id)
@@ -49,7 +86,11 @@ export default function BuildShop({ items, categories, selectedCategory, onSelec
               </div>
               <div style={{ fontWeight: 900 }}>{item.name}</div>
               <div style={{ fontWeight: 900, color: "#16a34a" }}>${item.cost}</div>
-              {locked && <div className="lock-banner">Unlocks at Level {item.unlockLevel}</div>}
+              {locked && (
+                <div className="lock-banner">
+                  {gated ? "Build a Villa + Generator first." : `Unlocks at Level ${item.unlockLevel}`}
+                </div>
+              )}
             </button>
           )
         })}

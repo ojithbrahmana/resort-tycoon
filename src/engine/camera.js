@@ -15,10 +15,14 @@ export function attachCameraControls({ dom, camera }){
   let lastX=0,lastY=0
   const target = new THREE.Vector3(0,0,0)
   let radius = 180
+  let targetRadius = radius
   let theta = Math.PI/4
   let phi = 0.85
+  const minRadius = 70
+  const maxRadius = 320
 
   function update(){
+    radius += (targetRadius - radius) * 0.12
     const x = target.x + radius * Math.sin(phi) * Math.sin(theta)
     const z = target.z + radius * Math.sin(phi) * Math.cos(theta)
     const y = target.y + radius * Math.cos(phi)
@@ -70,10 +74,10 @@ export function attachCameraControls({ dom, camera }){
     lastX=e.clientX; lastY=e.clientY
   })
   dom.addEventListener("wheel",(e)=>{
-    if (!enabled || !pointerDown) return
-    radius = Math.max(60, Math.min(360, radius + e.deltaY*0.15))
-    update()
-  }, { passive:true })
+    if (!enabled) return
+    e.preventDefault()
+    targetRadius = Math.max(minRadius, Math.min(maxRadius, targetRadius + e.deltaY * 0.25))
+  }, { passive:false })
 
   return { update, setEnabled }
 }

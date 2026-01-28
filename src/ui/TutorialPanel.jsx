@@ -1,13 +1,15 @@
 import React from "react"
 
-export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose }){
+const stopUiEvent = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+export default function TutorialPanel({ tutorial, onClose }){
   return (
-    <div className="panel guide">
+    <div id="tutorialPanel" className="panel guide">
       <div className="avatar">🐧</div>
       <div className="bubble">
-        <button className="guide-close" type="button" onClick={onClose} aria-label="Close tutorial">
-          ✕
-        </button>
         <div style={{ fontWeight: 900, fontFamily: "var(--font-display)" }}>{tutorial.message}</div>
         <div className="checklist">
           {tutorial.steps.map((step, i) => (
@@ -21,7 +23,17 @@ export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose })
           Tip: Villas only earn with power.
         </div>
         <div style={{ marginTop: 10 }}>
-          <button className={`btn ${nextJiggle ? "jiggle" : ""}`} onClick={onNext}>Next</button>
+          <button
+            className="btn"
+            type="button"
+            onMouseDown={stopUiEvent}
+            onClick={(event) => {
+              stopUiEvent(event)
+              onClose()
+            }}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

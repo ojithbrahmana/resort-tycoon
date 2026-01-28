@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three"
 import { createEngine } from "../engine/engine.js"
-import { gridToWorld, key } from "../engine/grid.js"
+import { gridToWorld, key, worldToGrid } from "../engine/grid.js"
 import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutorial.js"
 import { computeEconomy } from "../game/economy"
 import { createProgressionState, applyXp, XP_REWARDS } from "../game/progression"
@@ -19,6 +19,13 @@ import LevelToast from "../ui/LevelToast.jsx"
 const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
 const VILLA_IDS = new Set(["villa", "villa_plus"])
+const PROGRESSION_REQUIRED = new Set(["villa", "villa_plus", "generator"])
+const LOAN_OPTIONS = [
+  { principal: 500, rate: 0.1 },
+  { principal: 2000, rate: 0.2 },
+  { principal: 5000, rate: 0.35 },
+]
+const LOAN_DURATION_SEC = 60
 
 function createUid(prefix){
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -46,6 +53,10 @@ export default function App(){
   const levelRef = useRef(1)
   const hoverRef = useRef(null)
   const dragRef = useRef({ active: false, start: null, axis: null, placed: new Set() })
+  const moveSelectionRef = useRef(null)
+  const activeLoanRef = useRef(null)
+  const negativeTimerRef = useRef(0)
+  const debtTimerRef = useRef(0)
 
   const [mode, setMode] = useState("build")
   const [category, setCategory] = useState("All")
@@ -60,11 +71,16 @@ export default function App(){
   const [levelUp, setLevelUp] = useState(null)
   const [confetti, setConfetti] = useState([])
   const [splashPhase, setSplashPhase] = useState("show")
-  const [nextJiggle, setNextJiggle] = useState(false)
   const [progression, setProgression] = useState(createProgressionState())
   const [tutorialVisible, setTutorialVisible] = useState(true)
+  const [tutorialDismissed, setTutorialDismissed] = useState(false)
   const [buildShopOpen, setBuildShopOpen] = useState(true)
   const [revenueLabels, setRevenueLabels] = useState([])
+  const [hasBuiltVilla, setHasBuiltVilla] = useState(false)
+  const [hasBuiltGenerator, setHasBuiltGenerator] = useState(false)
+  const [loanPanelOpen, setLoanPanelOpen] = useState(false)
+  const [activeLoan, setActiveLoan] = useState(null)
+  const [bankrupt, setBankrupt] = useState(false)
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
@@ -75,6 +91,7 @@ export default function App(){
   moneyRef.current = money
   levelRef.current = progression.level
   splashRef.current = splashPhase
+  activeLoanRef.current = activeLoan
 
   useEffect(() => {
     const s = new Set()
@@ -177,36 +194,55 @@ export default function App(){
       const current = engineRef.current
       if (!current) return
       if (splashRef.current !== "done") return
+      if (bankrupt) return
       if (!isCanvasEvent(e)) return
-      if (modeRef.current !== "build") return
-      const item = catalogById[toolRef.current]
-      current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupiedRef.current })
+      if (modeRef.current === "build") {
+        const item = catalogById[toolRef.current]
+        current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupiedRef.current })
+      }
+      if (modeRef.current === "move" && moveSelectionRef.current) {
+        const selection = moveSelectionRef.current
+        const item = catalogById[selection.id]
+        const occupied = new Set(occupiedRef.current)
+        const footprint = getFootprintCells({ gx: selection.gx, gz: selection.gz }, item?.footprint)
+        footprint.forEach(cell => occupied.delete(key(cell.gx, cell.gz)))
+        current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupied })
+      }
     }
     const onMouseDown = (e) => {
       const current = engineRef.current
       if (!current) return
       if (splashRef.current !== "done") return
+      if (bankrupt) return
       if (!isCanvasEvent(e)) return
-      if (modeRef.current !== "build") return
-      const item = catalogById[toolRef.current]
-      if (item?.id === "road") {
-        const hover = hoverRef.current
-        if (!hover) return
-        if (!hover.ok) {
-          signalInvalid("Can't build there.")
+      if (modeRef.current === "build") {
+        const item = catalogById[toolRef.current]
+        if (item?.id === "road") {
+          const hover = hoverRef.current
+          if (!hover) return
+          if (!hover.ok) {
+            signalInvalid("Can't build there.")
+            return
+          }
+          startDrag(hover)
+          const startResult = placeBuilding({ item, gx: hover.gx, gz: hover.gz })
+          if (startResult.placed) {
+            dragRef.current.placed.add(key(hover.gx, hover.gz))
+          } else {
+            stopDrag()
+            return
+          }
           return
         }
-        startDrag(hover)
-        const startResult = placeBuilding({ item, gx: hover.gx, gz: hover.gz })
-        if (startResult.placed) {
-          dragRef.current.placed.add(key(hover.gx, hover.gz))
-        } else {
-          stopDrag()
-          return
-        }
+        current.handleClick(e)
         return
       }
-      current.handleClick(e)
+      if (modeRef.current === "move") {
+        handleMoveClick(e)
+      }
+      if (modeRef.current === "demolish") {
+        handleDemolishClick(e)
+      }
     }
     const onMouseUp = () => {
       stopDrag()
@@ -224,14 +260,20 @@ export default function App(){
   }, [viewportRef])
 
   useEffect(() => {
-    engineRef.current?.setInputLocked(splashPhase !== "done")
-  }, [splashPhase])
+    engineRef.current?.setInputLocked(splashPhase !== "done" || bankrupt)
+  }, [splashPhase, bankrupt])
 
   useEffect(() => {
     if (mode !== "build" && buildShopOpen) {
       setBuildShopOpen(false)
     }
   }, [mode, buildShopOpen])
+
+  useEffect(() => {
+    if (mode !== "move") {
+      clearMoveSelection()
+    }
+  }, [mode])
 
   useEffect(() => {
     const eng = engineRef.current
@@ -316,6 +358,52 @@ export default function App(){
     }
   }, [economy.statuses])
 
+  useEffect(() => {
+    if (!activeLoan) return undefined
+    const timer = setInterval(() => {
+      setActiveLoan(prev => {
+        if (!prev) return null
+        const remainingOwed = Math.max(0, prev.remainingOwed - prev.paymentPerSecond)
+        if (remainingOwed <= 0) {
+          return null
+        }
+        return { ...prev, remainingOwed }
+      })
+      setMoney(prev => {
+        const payment = activeLoanRef.current?.paymentPerSecond ?? 0
+        const next = prev - payment
+        moneyRef.current = next
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [activeLoan])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (bankrupt) return
+      const income = economyRef.current.total
+      const payment = activeLoanRef.current?.paymentPerSecond ?? 0
+      if (moneyRef.current < 0) {
+        negativeTimerRef.current += 0.25
+      } else {
+        negativeTimerRef.current = 0
+      }
+      if (payment > income * 0.75 && payment > 0) {
+        debtTimerRef.current += 0.25
+      } else {
+        debtTimerRef.current = 0
+      }
+      if (negativeTimerRef.current >= 3 || debtTimerRef.current >= 5) {
+        setBankrupt(true)
+        setBuildShopOpen(false)
+        setLoanPanelOpen(false)
+        engineRef.current?.setInputLocked(true)
+      }
+    }, 250)
+    return () => clearInterval(timer)
+  }, [bankrupt])
+
   function addXp(amount){
     setProgression(prev => {
       const result = applyXp(prev, amount)
@@ -328,6 +416,11 @@ export default function App(){
       }
       return result.next
     })
+  }
+
+  function stopUiEvent(event){
+    event.preventDefault()
+    event.stopPropagation()
   }
 
   function pop(msg){
@@ -344,10 +437,65 @@ export default function App(){
     playSound("error")
   }
 
+  function takeLoan({ principal, rate }){
+    if (activeLoanRef.current) return
+    const totalOwed = Math.round(principal * (1 + rate))
+    const paymentPerSecond = totalOwed / LOAN_DURATION_SEC
+    setActiveLoan({
+      principal,
+      rate,
+      totalOwed,
+      remainingOwed: totalOwed,
+      paymentPerSecond,
+    })
+    setMoney(prev => {
+      const next = prev + principal
+      moneyRef.current = next
+      return next
+    })
+    setLoanPanelOpen(false)
+  }
+
+  function startNewGame(){
+    engineRef.current?.resetWorld?.()
+    engineRef.current?.setInputLocked(false)
+    setBuildings([])
+    occupiedRef.current = new Set()
+    setMoney(1000)
+    setMoneyDisplay(1000)
+    moneyRef.current = 1000
+    setIncomeTrend("stable")
+    setIncomeDeltaText("")
+    setProgression(createProgressionState())
+    setHasBuiltVilla(false)
+    setHasBuiltGenerator(false)
+    setActiveLoan(null)
+    activeLoanRef.current = null
+    negativeTimerRef.current = 0
+    debtTimerRef.current = 0
+    setTutorialDismissed(false)
+    setTutorialVisible(true)
+    setModeSafe("build")
+    setCategory("All")
+    setTool("villa")
+    engineRef.current?.setTool("villa")
+    setBuildShopOpen(true)
+    setLoanPanelOpen(false)
+    setBankrupt(false)
+    setToast(null)
+    setLevelUp(null)
+    setConfetti([])
+    earningOnceRef.current = new Set()
+    lastIncomeRef.current = 0
+    clearMoveSelection()
+  }
+
   function setModeSafe(next){
     setMode(next)
     engineRef.current?.setMode(next)
-    if (next !== "build") {
+    if (next === "build") {
+      setBuildShopOpen(true)
+    } else {
       setBuildShopOpen(false)
     }
   }
@@ -356,8 +504,7 @@ export default function App(){
     if (!viewportRef.current) return false
     if (!event?.target) return false
     if (!viewportRef.current.contains(event.target)) return false
-    if (event.target.closest?.(".guide")) return true
-    if (event.target.closest?.(".ui")) return false
+    if (event.target.closest?.("#hud, #buildShop, #tutorialPanel, .ui")) return false
     return true
   }
 
@@ -379,6 +526,9 @@ export default function App(){
       if (occupiedRef.current.has(key(cell.gx, cell.gz))) {
         return "Tile already occupied."
       }
+    }
+    if (!(hasBuiltVilla && hasBuiltGenerator) && !PROGRESSION_REQUIRED.has(item.id)) {
+      return "Build a Villa and Generator first."
     }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
@@ -405,19 +555,27 @@ export default function App(){
     }
     moneyRef.current -= item.cost
     setMoney(prev => prev - item.cost)
+    if (VILLA_IDS.has(item.id)) {
+      setHasBuiltVilla(true)
+    }
+    if (item.id === "generator") {
+      setHasBuiltGenerator(true)
+    }
     addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
     playSound("place")
 
     void engineRef.current?.addBuilding({ building: item, gx, gz, uid }).then(obj => {
       let bboxTopY = null
       let bboxHeight = null
+      let bboxBottomY = null
       if (obj) {
         const bounds = new THREE.Box3().setFromObject(obj)
         bboxTopY = bounds.max.y
         bboxHeight = bounds.max.y - bounds.min.y
-        obj.userData = { ...obj.userData, bboxTopY, bboxHeight }
+        bboxBottomY = bounds.min.y
+        obj.userData = { ...obj.userData, bboxTopY, bboxHeight, bboxBottomY }
       }
-      setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj, bboxTopY, bboxHeight } : b))
+      setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
     })
 
     pop(`${item.name} placed.`)
@@ -455,6 +613,99 @@ export default function App(){
       }
     }
     return cells
+  }
+
+  function findBuildingAtCell({ gx, gz }){
+    const current = buildingsRef.current
+    for (let i = current.length - 1; i >= 0; i -= 1) {
+      const building = current[i]
+      const item = catalogById[building.id]
+      const cells = getFootprintCells({ gx: building.gx, gz: building.gz }, item?.footprint)
+      if (cells.some(cell => cell.gx === gx && cell.gz === gz)) {
+        return building
+      }
+    }
+    return null
+  }
+
+  function clearMoveSelection(){
+    moveSelectionRef.current = null
+    engineRef.current?.clearSelectionOutline?.()
+    engineRef.current?.clearGhost?.()
+  }
+
+  function selectMoveBuilding(building){
+    if (!building) return
+    const item = catalogById[building.id]
+    moveSelectionRef.current = building
+    engineRef.current?.setSelectionOutline?.({ gx: building.gx, gz: building.gz, footprint: item?.footprint })
+  }
+
+  function handleMoveClick(event){
+    const eng = engineRef.current
+    if (!eng) return
+    const hit = eng.pickIsland?.(event.clientX, event.clientY)
+    if (!hit) return
+    const { gx, gz } = worldToGrid(hit.x, hit.z)
+    const selection = moveSelectionRef.current
+    if (!selection) {
+      const target = findBuildingAtCell({ gx, gz })
+      if (!target || target.id === "road") return
+      selectMoveBuilding(target)
+      return
+    }
+    const hover = hoverRef.current
+    if (!hover || !hover.ok) {
+      signalInvalid("Can't move there.")
+      return
+    }
+    const item = catalogById[selection.id]
+    if (!item) return
+    if (hover.gx === selection.gx && hover.gz === selection.gz) {
+      clearMoveSelection()
+      return
+    }
+    const oldCells = getFootprintCells({ gx: selection.gx, gz: selection.gz }, item?.footprint)
+    const newCells = getFootprintCells({ gx: hover.gx, gz: hover.gz }, item?.footprint)
+    oldCells.forEach(cell => occupiedRef.current.delete(key(cell.gx, cell.gz)))
+    newCells.forEach(cell => occupiedRef.current.add(key(cell.gx, cell.gz)))
+    eng.removePlacedObject(selection.object)
+    setBuildings(prev => prev.map(b => (
+      b.uid === selection.uid
+        ? { ...b, gx: hover.gx, gz: hover.gz, object: null }
+        : b
+    )))
+    void eng.addBuilding({ building: item, gx: hover.gx, gz: hover.gz, uid: selection.uid }).then(obj => {
+      let bboxTopY = null
+      let bboxHeight = null
+      let bboxBottomY = null
+      if (obj) {
+        const bounds = new THREE.Box3().setFromObject(obj)
+        bboxTopY = bounds.max.y
+        bboxHeight = bounds.max.y - bounds.min.y
+        bboxBottomY = bounds.min.y
+        obj.userData = { ...obj.userData, bboxTopY, bboxHeight, bboxBottomY }
+      }
+      setBuildings(prev => prev.map(b => b.uid === selection.uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
+    })
+    clearMoveSelection()
+  }
+
+  function handleDemolishClick(event){
+    const eng = engineRef.current
+    if (!eng) return
+    const hit = eng.pickIsland?.(event.clientX, event.clientY)
+    if (!hit) return
+    const { gx, gz } = worldToGrid(hit.x, hit.z)
+    const target = findBuildingAtCell({ gx, gz })
+    if (!target) return
+    const item = catalogById[target.id]
+    if (!item) return
+    const cells = getFootprintCells({ gx: target.gx, gz: target.gz }, item?.footprint)
+    cells.forEach(cell => occupiedRef.current.delete(key(cell.gx, cell.gz)))
+    eng.removePlacedObject(target.object)
+    setBuildings(prev => prev.filter(b => b.uid !== target.uid))
+    clearMoveSelection()
   }
 
   function handleDragPlacement({ gx, gz }){
@@ -513,7 +764,9 @@ export default function App(){
           topY = bounds.max.y
           obj.userData.bboxTopY = topY
         }
-        tempVec.set(obj.position.x, topY + 0.6, obj.position.z)
+        const height = building?.bboxHeight ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
+        const offset = Math.max(0.6, height * 0.2)
+        tempVec.set(obj.position.x, topY + offset, obj.position.z)
         tempVec.project(camera)
         if (
           tempVec.z < -1 ||
@@ -557,7 +810,12 @@ export default function App(){
           level={progression.level}
           xp={progression.xp}
           xpToNext={progression.xpToNext}
-          onReopenTutorial={() => setTutorialVisible(true)}
+          onReopenTutorial={() => {
+            if (!tutorialDismissed) setTutorialVisible(true)
+          }}
+          onOpenLoan={() => {
+            if (!bankrupt) setLoanPanelOpen(true)
+          }}
         />
 
         <ModeBar mode={mode} onChange={setModeSafe} />
@@ -577,18 +835,9 @@ export default function App(){
               level={progression.level}
               hidden={!buildShopOpen}
               onClose={() => setBuildShopOpen(false)}
+              progressionLocked={!(hasBuiltVilla && hasBuiltGenerator)}
+              progressionAllowedIds={PROGRESSION_REQUIRED}
             />
-
-            {!buildShopOpen && (
-              <button
-                className="panel shop-toggle"
-                type="button"
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={() => setBuildShopOpen(true)}
-              >
-                Open Build Shop
-              </button>
-            )}
           </>
         )}
 
@@ -615,20 +864,80 @@ export default function App(){
           </div>
         )}
 
-        {tutorialVisible && (
+        {tutorialVisible && !tutorialDismissed && (
           <TutorialPanel
             tutorial={tutorial}
-            nextJiggle={nextJiggle}
-            onNext={() => {
-              setNextJiggle(true)
-              window.clearTimeout(setNextJiggle._t)
-              setNextJiggle._t = window.setTimeout(() => setNextJiggle(false), 400)
+            onClose={() => {
+              setTutorialVisible(false)
+              setTutorialDismissed(true)
             }}
-            onClose={() => setTutorialVisible(false)}
           />
         )}
 
+        {loanPanelOpen && !bankrupt && (
+          <div className="panel loan-panel" onMouseDown={stopUiEvent}>
+            <div className="loan-header">
+              <strong>Loans</strong>
+              <button
+                className="loan-close"
+                type="button"
+                onMouseDown={stopUiEvent}
+                onClick={(event) => {
+                  stopUiEvent(event)
+                  setLoanPanelOpen(false)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            {activeLoan ? (
+              <div className="loan-active">
+                <div>Active loan: ${activeLoan.principal}</div>
+                <div>Remaining: ${Math.ceil(activeLoan.remainingOwed)}</div>
+                <div>Payment: ${activeLoan.paymentPerSecond.toFixed(1)}/sec</div>
+              </div>
+            ) : (
+              <div className="loan-options">
+                {LOAN_OPTIONS.map(option => (
+                  <button
+                    key={option.principal}
+                    className="loan-card"
+                    type="button"
+                    onMouseDown={stopUiEvent}
+                    onClick={(event) => {
+                      stopUiEvent(event)
+                      takeLoan(option)
+                    }}
+                  >
+                    <div>${option.principal.toLocaleString()}</div>
+                    <small>@ {Math.round(option.rate * 100)}%</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <LevelToast levelUp={levelUp} onDismiss={() => setLevelUp(null)} />
+
+        {bankrupt && (
+          <div className="bankruptcy-overlay" onMouseDown={stopUiEvent}>
+            <div className="panel bankruptcy-panel">
+              <h2>Your hotel went bankrupt.</h2>
+              <button
+                className="btn"
+                type="button"
+                onMouseDown={stopUiEvent}
+                onClick={(event) => {
+                  stopUiEvent(event)
+                  startNewGame()
+                }}
+              >
+                Start New Game
+              </button>
+            </div>
+          </div>
+        )}
 
         {confetti.length > 0 && (
           <div className="confetti">

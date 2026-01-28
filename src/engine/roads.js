@@ -252,4 +252,18 @@ export class RoadSystem {
   getRoadCells() {
     return Array.from(this.roadsSet.values()).map(parseKey)
   }
+
+  clear() {
+    this.roadsSet.clear()
+    this.tileData.clear()
+    this.bounces.clear()
+    for (const mesh of Object.values(this.meshes)) {
+      mesh.count = 0
+      mesh.instanceMatrix.needsUpdate = true
+    }
+    for (const mesh of Object.values(this.outlines)) {
+      mesh.count = 0
+      mesh.instanceMatrix.needsUpdate = true
+    }
+  }
 }
