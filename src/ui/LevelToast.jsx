@@ -3,7 +3,7 @@ import React from "react"
 export default function LevelToast({ levelUp, onDismiss }){
   if (!levelUp) return null
   return (
-    <div className="panel level-toast">
+    <div className="panel level-toast" onMouseDown={(event) => event.stopPropagation()}>
       <h3>🎉 Level Up! (Lv {levelUp.level})</h3>
       <div style={{ fontWeight: 800 }}>New items unlocked:</div>
       <div className="unlock-list">

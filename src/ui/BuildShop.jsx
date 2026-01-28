@@ -5,7 +5,10 @@ export default function BuildShop({ items, categories, selectedCategory, onSelec
   const [jiggleId, setJiggleId] = useState(null)
 
   return (
-    <div className={`panel drawer ${hidden ? "hidden" : ""}`}>
+    <div
+      className={`panel drawer ${hidden ? "hidden" : ""}`}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <header>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--font-display)" }}>Build Shop</div>

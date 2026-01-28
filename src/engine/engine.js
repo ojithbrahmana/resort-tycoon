@@ -22,6 +22,7 @@ export function createEngine({ container }){
   const { scene, island } = createScene()
   const camera = createCamera(width,height)
   const controls = attachCameraControls({ dom: renderer.domElement, camera })
+  controls.setEnabled?.(false)
 
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2()
@@ -47,6 +48,7 @@ export function createEngine({ container }){
   let shakeTime = 0
   let shakeDuration = 0.2
   let shakeStrength = 0.6
+  let inputLocked = false
 
   function setHandlers({ onPlaceCb, onHoverCb, onInvalidCb }){
     onPlace = onPlaceCb
@@ -54,7 +56,16 @@ export function createEngine({ container }){
     onInvalid = onInvalidCb
   }
 
-  function setMode(next){ mode = next; removeGhost() }
+  function setMode(next){
+    mode = next
+    controls.setEnabled?.(!inputLocked && mode === "camera")
+    removeGhost()
+  }
+
+  function setInputLocked(locked){
+    inputLocked = locked
+    controls.setEnabled?.(!inputLocked && mode === "camera")
+  }
   function setTool(t){ selectedTool = t; removeGhost() }
 
   function removeGhost(){
@@ -165,8 +176,17 @@ export function createEngine({ container }){
     return shadow
   }
 
+  function getFootprintCenter({ gx, gz }, footprint){
+    const { w = 1, h = 1 } = footprint ?? {}
+    const center = {
+      gx: gx + (w - 1) / 2,
+      gz: gz + (h - 1) / 2,
+    }
+    return gridToWorld(center.gx, center.gz)
+  }
+
   async function addBuilding({ building, gx, gz, uid }){
-    const { x, z } = gridToWorld(gx,gz)
+    const { x, z } = getFootprintCenter({ gx, gz }, building?.footprint)
     if (building.id === "road") {
       roadSystem.addRoad({ gx, gz })
       return { type: "road", gx, gz, uid }
@@ -214,7 +234,7 @@ export function createEngine({ container }){
     buildGroup.remove(obj)
   }
 
-  function updateVillaStatus({ uid, gx, gz, roadOk, powerOk, active }){
+  function updateVillaStatus({ uid, gx, gz, roadOk, powerOk, active, footprint }){
     let status = villaStatus.get(uid)
     if (!status) {
       status = {
@@ -232,7 +252,7 @@ export function createEngine({ container }){
       villaStatus.set(uid, status)
     }
 
-    const { x, z } = gridToWorld(gx,gz)
+    const { x, z } = getFootprintCenter({ gx, gz }, footprint)
     const baseY = 9.2
 
     status.road.position.set(x - 1.4, baseY, z)
@@ -399,6 +419,7 @@ export function createEngine({ container }){
     setMode,
     setTool,
     setHandlers,
+    setInputLocked,
     pickIsland,
     handleMouseMove,
     handleClick,

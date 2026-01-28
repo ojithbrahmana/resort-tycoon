@@ -3,7 +3,7 @@ import React from "react"
 export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial }){
   const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
   return (
-    <div className="hud">
+    <div className="hud" onMouseDown={(event) => event.stopPropagation()}>
       <div className={`hud-pill ${money.bump ? "bump" : ""}`}>
         🪙 ${money.value}
       </div>
