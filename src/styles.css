@@ -594,7 +594,7 @@ button {
 
 .level-toast {
   position: fixed;
-  top: 108px;
+  top: 16px;
   left: 50%;
   transform: translateX(-50%) translateY(10px);
   padding: 12px 18px;
