@@ -19,7 +19,6 @@ import LevelToast from "../ui/LevelToast.jsx"
 const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
 const VILLA_IDS = new Set(["villa", "villa_plus"])
-const REVENUE_LABEL_IDS = new Set(["villa", "villa_plus", "generator"])
 const LOAN_OPTIONS = [
   { principal: 500, rate: 0.1 },
   { principal: 2000, rate: 0.2 },
@@ -768,8 +767,7 @@ export default function App(){
       const width = renderer.domElement.clientWidth
       const height = renderer.domElement.clientHeight
       const statuses = economyRef.current.statuses.filter(status => (
-        REVENUE_LABEL_IDS.has(status.id)
-        && status.active
+        status.active
         && status.incomePerSec > 0
       ))
       const labels = []

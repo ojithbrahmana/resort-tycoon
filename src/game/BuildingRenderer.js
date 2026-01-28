@@ -21,6 +21,25 @@ let palmScaleFactor = 1
 let spaModel = null
 let spaModelPromise = null
 let spaScaleFactor = 1
+const MODEL_BRIGHTNESS_FACTOR = 1.15
+
+function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
+  object.traverse((child) => {
+    if (!child.isMesh || !child.material) return
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    const brightened = materials.map((material) => {
+      const next = material.clone()
+      if (next.color) {
+        next.color.multiplyScalar(factor)
+      }
+      if (next.emissive) {
+        next.emissive.multiplyScalar(factor)
+      }
+      return next
+    })
+    child.material = Array.isArray(child.material) ? brightened : brightened[0]
+  })
+}
 
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
@@ -101,6 +120,7 @@ function createVillaMesh({ upgraded = false }) {
 
   group.add(createContactShadow(1.6))
   group.add(base, trim, roof)
+  applyModelBrightness(group)
   return group
 }
 
@@ -118,6 +138,7 @@ async function createVillaModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.6))
   group.add(clone)
+  applyModelBrightness(group)
   return group
 }
 
@@ -164,6 +185,7 @@ async function createIceCreamModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(2.2))
   group.add(clone)
+  applyModelBrightness(group)
   return group
 }
 
@@ -198,6 +220,7 @@ function createGeneratorMesh() {
 
   group.add(createContactShadow(1.3))
   group.add(body, chimney, light)
+  applyModelBrightness(group)
   return group
 }
 
@@ -244,6 +267,7 @@ async function createPalmModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.1))
   group.add(clone)
+  applyModelBrightness(group)
   return group
 }
 
@@ -290,6 +314,7 @@ async function createSpaModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(2.8))
   group.add(clone)
+  applyModelBrightness(group)
   return group
 }
 

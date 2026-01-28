@@ -9,7 +9,7 @@ export default function LevelToast({ levelUp, onDismiss }){
       return () => {}
     }
     setVisible(true)
-    const fadeTimer = window.setTimeout(() => setVisible(false), 2750)
+    const fadeTimer = window.setTimeout(() => setVisible(false), 2500)
     const dismissTimer = window.setTimeout(() => onDismiss?.(), 3000)
     return () => {
       window.clearTimeout(fadeTimer)
