@@ -675,9 +675,9 @@ button {
   transform: translate(-50%, -50%);
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(34, 197, 94, 0.18);
-  border: 1px solid rgba(34, 197, 94, 0.45);
-  color: #166534;
+  background: #22c55e;
+  border: 1px solid rgba(22, 101, 52, 0.65);
+  color: #ffffff;
   font-weight: 900;
   font-size: 13px;
   letter-spacing: 0.02em;
