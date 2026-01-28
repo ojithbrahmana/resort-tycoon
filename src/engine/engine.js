@@ -415,6 +415,7 @@ export function createEngine({ container }){
   }
 
   function resolveNearbyAnimationConflicts() {
+    if (state.npcs.length < 2) return
     for (let i = 0; i < state.npcs.length; i += 1) {
       const npc = state.npcs[i]
       for (let j = i + 1; j < state.npcs.length; j += 1) {
