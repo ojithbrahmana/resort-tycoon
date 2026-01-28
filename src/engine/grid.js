@@ -1,4 +1,4 @@
-import { GRID_SIZE } from "../data/constants.js"
+import { GRID_SIZE } from "../game/constants"
 
 export function worldToGrid(x,z){
   const gx = Math.round(x / GRID_SIZE)
