@@ -1,11 +1,16 @@
 import * as THREE from "three"
+import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
-import { worldToGrid, gridToWorld, key } from "./grid.js"
+import { worldToGrid, gridToWorld, key, neighbors4 } from "./grid.js"
 import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
+import { loadNpcModel } from "./npcLoader.js"
+
+const skeletonClone = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone
+const npcClone = skeletonClone || ((source) => source.clone(true))
 
 export function createEngine({ container }){
   preloadBuildingModels()
@@ -33,10 +38,33 @@ export function createEngine({ container }){
   const roadSystem = new RoadSystem({ scene, y: groundY + 0.08 })
 
   const popups = []
-  const guests = []
+  const npcs = []
   const villaStatus = new Map()
   const sparkles = []
   const placementBounces = []
+
+  const npcState = {
+    templateScene: null,
+    clips: [],
+    scale: 1,
+    ready: false,
+    pending: [],
+  }
+  const npcTargetCount = 8
+  const npcMinDistance = GRID_SIZE * 1.6
+  const npcNeighborRadius = GRID_SIZE * 2
+
+  loadNpcModel().then(({ scene: npcTemplateScene, clips: npcClips, scale }) => {
+    npcState.templateScene = npcTemplateScene
+    npcState.clips = npcClips
+    npcState.scale = scale
+    npcState.ready = true
+    if (npcState.pending.length) {
+      const pending = [...npcState.pending]
+      npcState.pending = []
+      pending.forEach(request => spawnGuest(request))
+    }
+  })
 
   let ghost = null
   let mode = "build"
@@ -49,6 +77,7 @@ export function createEngine({ container }){
   let shakeDuration = 0.2
   let shakeStrength = 0.6
   let inputLocked = false
+  let npcSpawnTimer = 0
 
   function setHandlers({ onPlaceCb, onHoverCb, onInvalidCb }){
     onPlace = onPlaceCb
@@ -297,13 +326,155 @@ export function createEngine({ container }){
     shakeTime = shakeDuration
   }
 
-  function spawnGuest({ path }){
-    if (!path || path.length < 2) return
-    const sprite = makeIconSprite({ emoji: "🧍", background: "#5b8cff", size: 1.8 })
-    const { x, z } = gridToWorld(path[0].gx, path[0].gz)
-    sprite.position.set(x, 4.5, z)
-    buildGroup.add(sprite)
-    guests.push({ sprite, path, index: 0, speed: 2 })
+  function getNpcClipCandidates(tags) {
+    if (!npcState.clips.length) return []
+    if (!tags?.length) return npcState.clips
+    const loweredTags = tags.map(tag => tag.toLowerCase())
+    return npcState.clips.filter(clip =>
+      loweredTags.some(tag => clip.name.toLowerCase().includes(tag))
+    )
+  }
+
+  function getNearbyClipNames(position, radius, ignoreNpc) {
+    const names = new Set()
+    for (const npc of npcs) {
+      if (npc === ignoreNpc) continue
+      const dx = npc.object.position.x - position.x
+      const dz = npc.object.position.z - position.z
+      if (Math.hypot(dx, dz) <= radius) {
+        if (npc.currentClipName) names.add(npc.currentClipName)
+      }
+    }
+    return names
+  }
+
+  function pickNpcClip({ position, tags = [], ignoreNpc } = {}) {
+    const preferred = getNpcClipCandidates(tags)
+    const candidates = preferred.length ? preferred : npcState.clips
+    if (!candidates.length) return null
+    const nearby = getNearbyClipNames(position, npcNeighborRadius, ignoreNpc)
+    const shuffled = [...candidates].sort(() => Math.random() - 0.5)
+    const available = shuffled.find(clip => !nearby.has(clip.name))
+    return available || shuffled[0]
+  }
+
+  function applyNpcClip(npc, clip) {
+    if (!clip) return
+    if (npc.action) {
+      npc.action.stop()
+    }
+    const action = npc.mixer.clipAction(clip)
+    const speed = 0.9 + Math.random() * 0.25
+    action.timeScale = speed
+    action.time = Math.random() * Math.max(clip.duration, 0.1)
+    action.play()
+    npc.action = action
+    npc.currentClipName = clip.name
+  }
+
+  function isPositionSpaced(position, ignoreNpc) {
+    for (const npc of npcs) {
+      if (npc === ignoreNpc) continue
+      const dx = npc.object.position.x - position.x
+      const dz = npc.object.position.z - position.z
+      if (Math.hypot(dx, dz) < npcMinDistance) return false
+    }
+    return true
+  }
+
+  function pickSpawnCell(preferredCell) {
+    const roadCells = roadSystem.getRoadCells()
+    if (!roadCells.length) return null
+    if (preferredCell && roadSystem.hasRoad(preferredCell.gx, preferredCell.gz)) {
+      const preferredWorld = gridToWorld(preferredCell.gx, preferredCell.gz)
+      if (isPositionSpaced(preferredWorld)) {
+        return preferredCell
+      }
+    }
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const cell = roadCells[Math.floor(Math.random() * roadCells.length)]
+      const position = gridToWorld(cell.gx, cell.gz)
+      if (isPositionSpaced(position)) return cell
+    }
+    return null
+  }
+
+  function buildNpcInstance() {
+    if (!npcState.templateScene) return null
+    const npcRoot = npcClone(npcState.templateScene)
+    npcRoot.scale.setScalar(npcState.scale)
+    npcRoot.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(npcRoot)
+    const yOffset = -bounds.min.y
+    npcRoot.position.y += yOffset
+    const group = new THREE.Group()
+    group.add(npcRoot)
+    return { group, npcRoot }
+  }
+
+  function pickNextRoadCell(npc) {
+    const options = neighbors4(npc.currentCell.gx, npc.currentCell.gz)
+      .filter(cell => roadSystem.hasRoad(cell.gx, cell.gz))
+      .filter(cell => {
+        if (!npc.lastCell) return true
+        return !(cell.gx === npc.lastCell.gx && cell.gz === npc.lastCell.gz)
+      })
+
+    const viable = options.filter(cell => {
+      const position = gridToWorld(cell.gx, cell.gz)
+      return isPositionSpaced(position, npc)
+    })
+
+    const candidates = viable.length ? viable : options
+    if (!candidates.length) return null
+    return candidates[Math.floor(Math.random() * candidates.length)]
+  }
+
+  function spawnGuest({ path } = {}){
+    if (!npcState.ready) {
+      npcState.pending.push({ path })
+      return
+    }
+    if (!npcState.clips.length) return
+    if (npcs.length >= npcTargetCount) return
+
+    const startCell = pickSpawnCell(path?.[0])
+    if (!startCell) return
+    const instance = buildNpcInstance()
+    if (!instance) return
+
+    const { group, npcRoot } = instance
+    const worldPos = gridToWorld(startCell.gx, startCell.gz)
+    group.position.set(worldPos.x, groundY, worldPos.z)
+
+    const mixer = new THREE.AnimationMixer(npcRoot)
+    const moveClip = pickNpcClip({ position: group.position, tags: ["walk", "run", "confident"] })
+    const idleClip = pickNpcClip({ position: group.position, tags: ["idle", "stand"] })
+    const primaryClip = moveClip || idleClip || npcState.clips[0]
+
+    buildGroup.add(group)
+    const npc = {
+      object: group,
+      mixer,
+      action: null,
+      currentClipName: "",
+      currentCell: { ...startCell },
+      lastCell: null,
+      targetCell: null,
+      speed: 1.6 + Math.random() * 0.6,
+      idleClip,
+      moveClip: moveClip || primaryClip,
+      idleTimer: 0,
+    }
+    applyNpcClip(npc, primaryClip)
+    npc.targetCell = pickNextRoadCell(npc)
+    if (!npc.targetCell) {
+      npc.idleTimer = 0.6 + Math.random() * 0.8
+      if (npc.idleClip) {
+        applyNpcClip(npc, npc.idleClip)
+      }
+    }
+    npcs.push(npc)
   }
 
   function resize(){
@@ -322,6 +493,14 @@ export function createEngine({ container }){
 
   function update(delta){
     roadSystem.update(delta)
+
+    npcSpawnTimer -= delta
+    if (npcSpawnTimer <= 0 && npcState.ready && npcs.length < npcTargetCount) {
+      if (roadSystem.getRoadCells().length > 0) {
+        spawnGuest()
+        npcSpawnTimer = 0.6
+      }
+    }
 
     for (let i = popups.length - 1; i >= 0; i -= 1) {
       const p = popups[i]
@@ -371,23 +550,55 @@ export function createEngine({ container }){
       }
     }
 
-    for (let i = guests.length - 1; i >= 0; i -= 1) {
-      const guest = guests[i]
-      const nextIndex = Math.min(guest.index + 1, guest.path.length - 1)
-      const next = guest.path[nextIndex]
-      const target = gridToWorld(next.gx, next.gz)
-      const dx = target.x - guest.sprite.position.x
-      const dz = target.z - guest.sprite.position.z
-      const dist = Math.sqrt(dx * dx + dz * dz)
-      if (dist < 0.2) {
-        guest.index = nextIndex
-        if (guest.index >= guest.path.length - 1) {
-          buildGroup.remove(guest.sprite)
-          guests.splice(i, 1)
+    for (let i = npcs.length - 1; i >= 0; i -= 1) {
+      const npc = npcs[i]
+      npc.mixer.update(delta)
+
+      if (!npc.targetCell) {
+        npc.idleTimer -= delta
+        if (npc.idleTimer <= 0) {
+          npc.targetCell = pickNextRoadCell(npc)
+          if (npc.targetCell) {
+            const moveClip = pickNpcClip({
+              position: npc.object.position,
+              tags: ["walk", "run", "confident"],
+              ignoreNpc: npc,
+            })
+            if (moveClip) npc.moveClip = moveClip
+            if (npc.moveClip && npc.currentClipName !== npc.moveClip.name) {
+              applyNpcClip(npc, npc.moveClip)
+            }
+          } else {
+            npc.idleTimer = 0.8 + Math.random() * 0.8
+          }
+        }
+        continue
+      }
+
+      const target = gridToWorld(npc.targetCell.gx, npc.targetCell.gz)
+      const dx = target.x - npc.object.position.x
+      const dz = target.z - npc.object.position.z
+      const dist = Math.hypot(dx, dz)
+      if (dist < 0.15) {
+        npc.lastCell = npc.currentCell
+        npc.currentCell = npc.targetCell
+        npc.targetCell = pickNextRoadCell(npc)
+        if (!npc.targetCell) {
+          npc.idleTimer = 0.8 + Math.random() * 0.8
+          if (npc.idleClip) {
+            const idleClip = pickNpcClip({
+              position: npc.object.position,
+              tags: ["idle", "stand"],
+              ignoreNpc: npc,
+            })
+            npc.idleClip = idleClip || npc.idleClip
+            applyNpcClip(npc, npc.idleClip)
+          }
         }
       } else {
-        guest.sprite.position.x += (dx / dist) * guest.speed * delta
-        guest.sprite.position.z += (dz / dist) * guest.speed * delta
+        npc.object.rotation.y = Math.atan2(dx, dz)
+        npc.object.position.x += (dx / dist) * npc.speed * delta
+        npc.object.position.z += (dz / dist) * npc.speed * delta
       }
     }
   }
@@ -430,6 +641,6 @@ export function createEngine({ container }){
     spawnCoinSparkle,
     spawnGuest,
     shakeCamera,
-    getGuestCount: () => guests.length,
+    getGuestCount: () => npcs.length,
   }
 }
