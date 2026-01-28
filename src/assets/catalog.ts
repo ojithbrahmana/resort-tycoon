@@ -1,4 +1,4 @@
-export const CATEGORIES = ["All", "Stay", "Utility", "Decor", "Terrain"] as const
+export const CATEGORIES = ["All", "Stay", "Utility", "Decor", "Terrain", "Attractions"] as const
 
 export type BuildingCategory = (typeof CATEGORIES)[number]
 
@@ -125,6 +125,36 @@ export const CATALOG: BuildingCatalogItem[] = [
     iconPath: "/sprites/villa.png",
     unlockLevel: 3,
     buildingTier: 3,
+  },
+  {
+    id: "pool_halloween",
+    name: "Halloween Pool",
+    category: "Attractions",
+    cost: 600,
+    footprint: { w: 4, h: 4 },
+    requiresRoad: true,
+    requiresPower: true,
+    incomePerSec: 12,
+    modelPath: "/models/pool.final.glb",
+    spritePath: "/sprites/villa.png",
+    iconPath: "/sprites/villa.png",
+    unlockLevel: 1,
+    buildingTier: 3,
+  },
+  {
+    id: "beach_dj",
+    name: "Beach DJ",
+    category: "Attractions",
+    cost: 450,
+    footprint: { w: 2, h: 2 },
+    requiresRoad: true,
+    requiresPower: false,
+    incomePerSec: 9,
+    modelPath: "/models/beachdj.final.glb",
+    spritePath: "/sprites/villa.png",
+    iconPath: "/sprites/villa.png",
+    unlockLevel: 2,
+    buildingTier: 2,
   },
   {
     id: "dock",

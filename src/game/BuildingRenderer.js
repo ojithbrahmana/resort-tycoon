@@ -8,6 +8,8 @@ const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.
 const ICECREAM_MODEL_URL = new URL("../assets/models/icecream.final.glb", import.meta.url).toString()
 const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
 const SPA_MODEL_URL = new URL("../assets/models/spa.final.glb", import.meta.url).toString()
+const POOL_MODEL_URL = new URL("../assets/models/pool.final.glb", import.meta.url).toString()
+const BEACH_DJ_MODEL_URL = new URL("../assets/models/beachdj.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 let villaModel = null
 let villaModelPromise = null
@@ -21,6 +23,12 @@ let palmScaleFactor = 1
 let spaModel = null
 let spaModelPromise = null
 let spaScaleFactor = 1
+let poolModel = null
+let poolModelPromise = null
+let poolScaleFactor = 1
+let beachDjModel = null
+let beachDjModelPromise = null
+let beachDjScaleFactor = 1
 const MODEL_BRIGHTNESS_FACTOR = 1.35
 
 function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
@@ -71,7 +79,14 @@ function loadVillaModel() {
 }
 
 export function preloadBuildingModels() {
-  return Promise.all([loadVillaModel(), loadPalmModel(), loadIceCreamModel(), loadSpaModel()])
+  return Promise.all([
+    loadVillaModel(),
+    loadPalmModel(),
+    loadIceCreamModel(),
+    loadSpaModel(),
+    loadPoolModel(),
+    loadBeachDjModel(),
+  ])
 }
 
 function createContactShadow(radius) {
@@ -318,6 +333,100 @@ async function createSpaModel() {
   return group
 }
 
+function loadPoolModel() {
+  if (poolModelPromise) return poolModelPromise
+
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+
+  poolModelPromise = loader.loadAsync(POOL_MODEL_URL).then((gltf) => {
+    poolModel = gltf.scene
+    poolModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    poolModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(poolModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 4
+    poolScaleFactor = targetFootprint / footprint
+    return poolModel
+  })
+
+  return poolModelPromise
+}
+
+async function createPoolModel() {
+  const model = await loadPoolModel()
+  if (!model) {
+    return new THREE.Group()
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(poolScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset + 0.05
+  const group = new THREE.Group()
+  group.add(createContactShadow(2.8))
+  group.add(clone)
+  applyModelBrightness(group)
+  return group
+}
+
+function loadBeachDjModel() {
+  if (beachDjModelPromise) return beachDjModelPromise
+
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+
+  beachDjModelPromise = loader.loadAsync(BEACH_DJ_MODEL_URL).then((gltf) => {
+    beachDjModel = gltf.scene
+    beachDjModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    beachDjModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(beachDjModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 2
+    beachDjScaleFactor = targetFootprint / footprint
+    return beachDjModel
+  })
+
+  return beachDjModelPromise
+}
+
+async function createBeachDjModel() {
+  const model = await loadBeachDjModel()
+  if (!model) {
+    return new THREE.Group()
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(beachDjScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset + 0.05
+  const group = new THREE.Group()
+  group.add(createContactShadow(1.4))
+  group.add(clone)
+  applyModelBrightness(group)
+  return group
+}
+
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa" || building?.id === "villa_plus") {
     const object = await createVillaModel()
@@ -336,6 +445,14 @@ export async function createBuildingObject({ building, spritePath, size = 3.6 })
   }
   if (building?.id === "spa") {
     const object = await createSpaModel()
+    return { object, isModel: true }
+  }
+  if (building?.id === "pool_halloween") {
+    const object = await createPoolModel()
+    return { object, isModel: true }
+  }
+  if (building?.id === "beach_dj") {
+    const object = await createBeachDjModel()
     return { object, isModel: true }
   }
 
