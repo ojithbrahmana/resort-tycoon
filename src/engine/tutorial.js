@@ -1,0 +1,29 @@
+export const steps = [
+  { id:"villa", text:"Build a Villa (the money-maker).", done: (s)=> s.buildings.some(b=>b.id==="villa") },
+  { id:"roads", text:"Build 3 Road tiles next to the Villa.", done: (s)=> {
+      const v = s.buildings.find(b=>b.id==="villa"); if(!v) return false;
+      const roads = s.buildings.filter(b=>b.id==="road");
+      const adjacent = roads.filter(r => Math.abs(r.gx - v.gx) + Math.abs(r.gz - v.gz) === 1);
+      return adjacent.length >= 3;
+    }
+  },
+  { id:"gen", text:"Build a Generator within 6 tiles of the Villa.", done: (s)=> {
+      const v = s.buildings.find(b=>b.id==="villa"); if(!v) return false;
+      return s.buildings.filter(b=>b.id==="generator").some(g => {
+        const dx=v.gx-g.gx, dz=v.gz-g.gz;
+        return Math.sqrt(dx*dx+dz*dz) <= 6;
+      });
+    }
+  }
+]
+
+export function computeTutorialProgress(state){
+  const completed = steps.map(st => st.done(state))
+  const firstIncomplete = completed.findIndex(x=>!x)
+  const idx = firstIncomplete === -1 ? steps.length-1 : firstIncomplete
+  const allDone = completed.every(Boolean)
+  const message = allDone
+    ? "Nice. Now expand. Guests are picky and your electricity is probably illegal."
+    : steps[idx].text
+  return { completed, idx, allDone, message }
+}
