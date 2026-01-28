@@ -1,14 +1,58 @@
 import * as THREE from "three"
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
+import { SkeletonUtils } from "three/examples/jsm/utils/SkeletonUtils.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
-import { worldToGrid, gridToWorld, key } from "./grid.js"
+import { worldToGrid, gridToWorld, key, neighbors4 } from "./grid.js"
 import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
 
+const NPC_MODEL_URL = new URL("../assets/models/npc.woman.v1.glb", import.meta.url).toString()
+const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
+
+let npcWomanTemplate = null
+let npcWomanClips = []
+let npcWomanScaleFactor = 1
+let npcWomanPromise = null
+let npcIdleClips = []
+let npcWalkClips = []
+
+function initNpcLoader(){
+  if (npcWomanPromise) return npcWomanPromise
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+  npcWomanPromise = loader.loadAsync(NPC_MODEL_URL).then((gltf) => {
+    npcWomanTemplate = gltf.scene
+    npcWomanClips = gltf.animations ?? []
+    npcWomanTemplate.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    npcWomanTemplate.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(npcWomanTemplate)
+    const height = bounds.max.y - bounds.min.y
+    const targetHeight = 1.6
+    npcWomanScaleFactor = height > 0 ? targetHeight / height : 1
+    npcWomanTemplate.position.set(0, 0, 0)
+    npcIdleClips = npcWomanClips.filter(clip => /idle/i.test(clip.name))
+    npcWalkClips = npcWomanClips.filter(clip => /walk|walking/i.test(clip.name))
+    if (!npcIdleClips.length && npcWomanClips.length) npcIdleClips = [npcWomanClips[0]]
+    if (!npcWalkClips.length && npcWomanClips.length) npcWalkClips = [npcWomanClips[0]]
+    return npcWomanTemplate
+  })
+  return npcWomanPromise
+}
+
 export function createEngine({ container }){
   preloadBuildingModels()
+  initNpcLoader()
   const width = container.clientWidth
   const height = container.clientHeight
 
@@ -32,6 +76,12 @@ export function createEngine({ container }){
   scene.add(buildGroup)
   const roadSystem = new RoadSystem({ scene, y: groundY + 0.08 })
 
+  const state = {
+    npcs: [],
+  }
+  const buildingOccupiedKeys = new Set()
+  const buildingTilesByUid = new Map()
+
   const popups = []
   const guests = []
   const villaStatus = new Map()
@@ -49,6 +99,8 @@ export function createEngine({ container }){
   let shakeDuration = 0.2
   let shakeStrength = 0.6
   let inputLocked = false
+  let npcTime = 0
+  let npcSpawnedInitial = false
 
   function setHandlers({ onPlaceCb, onHoverCb, onInvalidCb }){
     onPlace = onPlaceCb
@@ -129,6 +181,34 @@ export function createEngine({ container }){
     return cells
   }
 
+  function registerBuildingFootprint({ uid, gx, gz, footprint }) {
+    if (!uid) return
+    const cells = getFootprintCells(gx, gz, footprint)
+    buildingTilesByUid.set(uid, cells)
+    for (const cell of cells) {
+      buildingOccupiedKeys.add(key(cell.gx, cell.gz))
+    }
+  }
+
+  function unregisterBuildingFootprint(uid) {
+    if (!uid) return
+    const cells = buildingTilesByUid.get(uid)
+    if (!cells) return
+    for (const cell of cells) {
+      buildingOccupiedKeys.delete(key(cell.gx, cell.gz))
+    }
+    buildingTilesByUid.delete(uid)
+  }
+
+  function isRoadTile(gx, gz) {
+    return roadSystem.roadsSet.has(key(gx, gz))
+  }
+
+  function isBlockedTile(gx, gz) {
+    if (!isRoadTile(gx, gz)) return true
+    return buildingOccupiedKeys.has(key(gx, gz))
+  }
+
   function handleMouseMove(e, { footprint, occupiedKeys }){
     const p = pickIsland(e.clientX, e.clientY)
     if(!p){ removeGhost(); onHover?.(null); return }
@@ -185,12 +265,263 @@ export function createEngine({ container }){
     return gridToWorld(center.gx, center.gz)
   }
 
+  function parseTileKey(tileKey) {
+    const [gx, gz] = tileKey.split(",").map(Number)
+    return { gx, gz }
+  }
+
+  function findNearestRoadTile({ gx, gz }) {
+    if (isRoadTile(gx, gz)) return { gx, gz }
+    const startKey = key(gx, gz)
+    const queue = [{ gx, gz }]
+    const visited = new Set([startKey])
+    while (queue.length) {
+      const current = queue.shift()
+      for (const neighbor of neighbors4(current.gx, current.gz)) {
+        if (!isWithinGrid(neighbor.gx, neighbor.gz)) continue
+        const { x, z } = gridToWorld(neighbor.gx, neighbor.gz)
+        if (!withinIsland(x, z)) continue
+        const neighborKey = key(neighbor.gx, neighbor.gz)
+        if (visited.has(neighborKey)) continue
+        if (isRoadTile(neighbor.gx, neighbor.gz)) {
+          return neighbor
+        }
+        visited.add(neighborKey)
+        queue.push(neighbor)
+      }
+    }
+    return null
+  }
+
+  const MIN_NPC_DISTANCE = 2.0
+  const NEAR_DISTANCE = 3.0
+  const TOO_CLOSE = 1.2
+  const NPC_DECISION_INTERVAL = 1.2
+  const NPC_GROUND_OFFSET = 0.05
+
+  function getRoadTilesArray() {
+    return Array.from(roadSystem.roadsSet.values())
+  }
+
+  function tileCenterPosition(gx, gz) {
+    const { x, z } = gridToWorld(gx, gz)
+    return new THREE.Vector3(x, groundY + NPC_GROUND_OFFSET, z)
+  }
+
+  function getNpcClipPool(isMoving) {
+    if (isMoving) return npcWalkClips.length ? npcWalkClips : npcWomanClips
+    return npcIdleClips.length ? npcIdleClips : npcWomanClips
+  }
+
+  function chooseClip(pool, excludeName) {
+    if (!pool.length) return null
+    const options = excludeName ? pool.filter(clip => clip.name !== excludeName) : pool
+    const source = options.length ? options : pool
+    return source[Math.floor(Math.random() * source.length)]
+  }
+
+  function playNpcClip(npc, clip, fadeDuration = 0.2) {
+    if (!clip) return
+    const action = npc.mixer.clipAction(clip)
+    if (npc.action && npc.action !== action) {
+      npc.action.fadeOut(fadeDuration)
+    }
+    action.reset()
+    action.time = Math.random() * clip.duration
+    action.timeScale = 0.9 + Math.random() * 0.25
+    action.fadeIn(fadeDuration)
+    action.play()
+    npc.action = action
+    npc.actionName = clip.name
+    npc.currentClip = clip
+  }
+
+  function retimeNpcAction(npc) {
+    if (!npc.action) return
+    const clip = npc.action.getClip()
+    npc.action.time = Math.random() * clip.duration
+    npc.action.timeScale = 0.9 + Math.random() * 0.25
+  }
+
+  function isNpcTooClose(position) {
+    for (const other of state.npcs) {
+      if (other.mesh.position.distanceTo(position) < MIN_NPC_DISTANCE) {
+        return true
+      }
+    }
+    return false
+  }
+
+  function spawnNpcWoman({ tileKey, position } = {}) {
+    if (!npcWomanTemplate) return null
+    let targetTile = null
+    if (tileKey) {
+      const parsed = parseTileKey(tileKey)
+      targetTile = findNearestRoadTile(parsed)
+    } else if (position) {
+      const grid = worldToGrid(position.x, position.z)
+      targetTile = findNearestRoadTile(grid)
+    }
+    const roads = getRoadTilesArray()
+    let attempts = 0
+    let finalTile = targetTile
+    while (attempts < 30) {
+      if (!finalTile && roads.length) {
+        finalTile = parseTileKey(roads[Math.floor(Math.random() * roads.length)])
+      }
+      if (!finalTile) return null
+      if (!isBlockedTile(finalTile.gx, finalTile.gz)) {
+        const pos = tileCenterPosition(finalTile.gx, finalTile.gz)
+        if (!isNpcTooClose(pos)) {
+          const npcMesh = SkeletonUtils.clone(npcWomanTemplate)
+          npcMesh.scale.setScalar(npcWomanScaleFactor)
+          npcMesh.position.copy(pos)
+          npcMesh.traverse(child => {
+            if (child.isMesh) {
+              child.castShadow = true
+              child.receiveShadow = true
+            }
+          })
+          const mixer = new THREE.AnimationMixer(npcMesh)
+          const clipPool = getNpcClipPool(false)
+          const clip = chooseClip(clipPool)
+          const npc = {
+            mesh: npcMesh,
+            mixer,
+            actionName: clip?.name ?? "",
+            speed: 1.1 + Math.random() * 0.5,
+            phaseOffset: Math.random() * Math.PI * 2,
+            targetTileKey: null,
+            currentTileKey: key(finalTile.gx, finalTile.gz),
+            lastTileKey: null,
+            nextDecisionAt: npcTime + Math.random() * NPC_DECISION_INTERVAL,
+            pauseUntil: 0,
+            isMoving: false,
+            action: null,
+            currentClip: null,
+          }
+          playNpcClip(npc, clip, 0.0)
+          buildGroup.add(npcMesh)
+          state.npcs.push(npc)
+          return npc
+        }
+      }
+      finalTile = null
+      attempts += 1
+    }
+    return null
+  }
+
+  function resolveNearbyAnimationConflicts() {
+    for (let i = 0; i < state.npcs.length; i += 1) {
+      const npc = state.npcs[i]
+      for (let j = i + 1; j < state.npcs.length; j += 1) {
+        const other = state.npcs[j]
+        if (npc.mesh.position.distanceTo(other.mesh.position) >= NEAR_DISTANCE) continue
+        if (!npc.actionName || npc.actionName !== other.actionName) continue
+        const pool = getNpcClipPool(other.isMoving)
+        const nextClip = chooseClip(pool, other.actionName)
+        if (nextClip && nextClip.name !== other.actionName) {
+          playNpcClip(other, nextClip)
+        } else {
+          retimeNpcAction(other)
+        }
+      }
+    }
+  }
+
+  function chooseNpcTarget(npc) {
+    const { gx, gz } = parseTileKey(npc.currentTileKey)
+    let options = neighbors4(gx, gz).filter(tile => isRoadTile(tile.gx, tile.gz) && !isBlockedTile(tile.gx, tile.gz))
+    if (npc.lastTileKey && options.length > 1) {
+      options = options.filter(tile => key(tile.gx, tile.gz) !== npc.lastTileKey)
+    }
+    if (!options.length) return null
+    const reserved = new Set(
+      state.npcs
+        .filter(other => other !== npc)
+        .flatMap(other => [other.currentTileKey, other.targetTileKey].filter(Boolean))
+    )
+    options = options.filter(tile => !reserved.has(key(tile.gx, tile.gz)))
+    if (!options.length) return null
+    return options[Math.floor(Math.random() * options.length)]
+  }
+
+  function updateNpcMovement(npc, delta) {
+    npc.mixer.update(delta)
+    if (npc.pauseUntil && npcTime < npc.pauseUntil) return
+
+    const nearby = state.npcs
+      .filter(other => other !== npc)
+      .map(other => npc.mesh.position.distanceTo(other.mesh.position))
+    const nearest = nearby.length ? Math.min(...nearby) : Infinity
+    let speedMultiplier = 1
+    if (nearest < TOO_CLOSE) {
+      speedMultiplier = 0.2
+      if (nearest < TOO_CLOSE * 0.7) {
+        npc.pauseUntil = npcTime + 0.4
+        npc.targetTileKey = null
+        npc.isMoving = false
+        const idleClip = chooseClip(getNpcClipPool(false), npc.actionName)
+        if (idleClip) playNpcClip(npc, idleClip)
+        return
+      }
+    }
+
+    if (npc.targetTileKey) {
+      const { gx, gz } = parseTileKey(npc.targetTileKey)
+      const targetPos = tileCenterPosition(gx, gz)
+      const dx = targetPos.x - npc.mesh.position.x
+      const dz = targetPos.z - npc.mesh.position.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      if (dist < 0.05) {
+        npc.mesh.position.copy(targetPos)
+        npc.lastTileKey = npc.currentTileKey
+        npc.currentTileKey = npc.targetTileKey
+        npc.targetTileKey = null
+        npc.isMoving = false
+        const idleClip = chooseClip(getNpcClipPool(false), npc.actionName)
+        if (idleClip) playNpcClip(npc, idleClip)
+        npc.nextDecisionAt = npcTime + NPC_DECISION_INTERVAL + Math.random() * 0.8
+      } else {
+        npc.isMoving = true
+        const walkClip = chooseClip(getNpcClipPool(true), npc.actionName)
+        if (walkClip && walkClip.name !== npc.actionName) {
+          playNpcClip(npc, walkClip)
+        }
+        npc.mesh.position.x += (dx / dist) * npc.speed * speedMultiplier * delta
+        npc.mesh.position.z += (dz / dist) * npc.speed * speedMultiplier * delta
+      }
+    } else if (npcTime >= npc.nextDecisionAt) {
+      const next = chooseNpcTarget(npc)
+      if (next) {
+        npc.targetTileKey = key(next.gx, next.gz)
+      } else {
+        npc.nextDecisionAt = npcTime + NPC_DECISION_INTERVAL
+      }
+    }
+
+    const grid = worldToGrid(npc.mesh.position.x, npc.mesh.position.z)
+    if (!isRoadTile(grid.gx, grid.gz)) {
+      const nearestTile = findNearestRoadTile(grid)
+      if (nearestTile) {
+        npc.mesh.position.copy(tileCenterPosition(nearestTile.gx, nearestTile.gz))
+        npc.currentTileKey = key(nearestTile.gx, nearestTile.gz)
+        npc.targetTileKey = null
+        npc.isMoving = false
+        const idleClip = chooseClip(getNpcClipPool(false), npc.actionName)
+        if (idleClip) playNpcClip(npc, idleClip)
+      }
+    }
+  }
+
   async function addBuilding({ building, gx, gz, uid }){
     const { x, z } = getFootprintCenter({ gx, gz }, building?.footprint)
     if (building.id === "road") {
       roadSystem.addRoad({ gx, gz })
       return { type: "road", gx, gz, uid }
     }
+    registerBuildingFootprint({ uid, gx, gz, footprint: building?.footprint })
 
     const size = building.id === "road" ? 3.0 : 3.6
     const placeholder = makeBillboardSprite(building.spritePath, size)
@@ -228,6 +559,7 @@ export function createEngine({ container }){
       roadSystem.removeRoad({ gx: obj.gx, gz: obj.gz })
       return
     }
+    unregisterBuildingFootprint(obj.userData?.uid)
     if (obj.userData?.shadow) {
       buildGroup.remove(obj.userData.shadow)
     }
@@ -322,6 +654,24 @@ export function createEngine({ container }){
 
   function update(delta){
     roadSystem.update(delta)
+    npcTime += delta
+    if (!npcSpawnedInitial && npcWomanTemplate && roadSystem.roadsSet.size > 0) {
+      const targetCount = 3 + Math.floor(Math.random() * 4)
+      const roadTiles = getRoadTilesArray().map(parseTileKey)
+      roadTiles.sort((a, b) => {
+        const distA = Math.abs(a.gx) + Math.abs(a.gz)
+        const distB = Math.abs(b.gx) + Math.abs(b.gz)
+        return distA - distB
+      })
+      const preferred = roadTiles.slice(0, Math.min(20, roadTiles.length))
+      for (let i = 0; i < targetCount; i += 1) {
+        const chosen = preferred.length
+          ? preferred[Math.floor(Math.random() * preferred.length)]
+          : null
+        spawnNpcWoman({ tileKey: chosen ? key(chosen.gx, chosen.gz) : null })
+      }
+      npcSpawnedInitial = true
+    }
 
     for (let i = popups.length - 1; i >= 0; i -= 1) {
       const p = popups[i]
@@ -390,6 +740,11 @@ export function createEngine({ container }){
         guest.sprite.position.z += (dz / dist) * guest.speed * delta
       }
     }
+
+    for (const npc of state.npcs) {
+      updateNpcMovement(npc, delta)
+    }
+    resolveNearbyAnimationConflicts()
   }
 
   function tick(){
