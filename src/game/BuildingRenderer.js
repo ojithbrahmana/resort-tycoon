@@ -22,6 +22,31 @@ function loadVillaModel() {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
+        const geometry = child.geometry
+        if (geometry?.computeTangents && geometry.attributes?.normal && geometry.attributes?.uv && !geometry.attributes?.tangent) {
+          geometry.computeTangents()
+        }
+        const materials = Array.isArray(child.material) ? child.material : [child.material]
+        materials.forEach((material) => {
+          if (!material) return
+          if (material.normalMap) {
+            const current = material.normalScale ?? new THREE.Vector2(1, 1)
+            const clamp = (value) => Math.sign(value || 1) * Math.min(Math.abs(value || 1), 0.6)
+            const next = new THREE.Vector2(clamp(current.x), clamp(current.y))
+            if (material.normalScale) {
+              material.normalScale.copy(next)
+            } else {
+              material.normalScale = next
+            }
+          }
+          if (typeof material.metalness === "number") {
+            material.metalness = Math.min(material.metalness, 0.2)
+          }
+          if (typeof material.roughness === "number") {
+            material.roughness = Math.min(1, material.roughness + 0.1)
+          }
+          material.needsUpdate = true
+        })
       }
     })
     return villaModel
@@ -90,6 +115,7 @@ async function createVillaModel() {
   }
   const clone = model.clone(true)
   const group = new THREE.Group()
+  group.userData.disableScaleBounce = true
   group.add(createContactShadow(1.6))
   group.add(clone)
   return group

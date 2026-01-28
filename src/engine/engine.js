@@ -147,7 +147,7 @@ export function createEngine({ container }){
       if (isModel) {
         buildGroup.remove(placeholder)
         object.position.set(x, groundY, z)
-        object.userData = { gx, gz, uid }
+        object.userData = { ...object.userData, gx, gz, uid }
         animatePlacement(object)
         buildGroup.add(object)
         return object
@@ -228,7 +228,7 @@ export function createEngine({ container }){
   }
 
   function animatePlacement(object){
-    if (!object) return
+    if (!object || object.userData?.disableScaleBounce) return
     object.userData.baseScale = object.scale.clone()
     placementBounces.push({ object, time: 0, duration: 0.25 })
   }

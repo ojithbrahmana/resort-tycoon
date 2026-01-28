@@ -6,8 +6,11 @@ export function createScene(){
   scene.background = new THREE.Color(0x8ae3ff)
   scene.fog = new THREE.Fog(0x8ae3ff, 140, 520)
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75)
+  const ambient = new THREE.AmbientLight(0xffffff, 0.25)
   scene.add(ambient)
+
+  const hemi = new THREE.HemisphereLight(0xbfe9ff, 0xf0e0c2, 0.45)
+  scene.add(hemi)
 
   const sun = new THREE.DirectionalLight(0xffffff, 0.9)
   sun.position.set(90, 140, 70)
@@ -47,14 +50,14 @@ export function createScene(){
   shore.position.y = 3.05
   scene.add(shore)
 
-  // grass patch
-  const grass = new THREE.Mesh(
+  // sand patch
+  const sand = new THREE.Mesh(
     new THREE.CircleGeometry(ISLAND_RADIUS - 12, 64),
-    new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.85 })
+    new THREE.MeshStandardMaterial({ color: 0xd9c6a3, roughness: 0.9 })
   )
-  grass.rotation.x = -Math.PI / 2
-  grass.position.y = 3.02
-  scene.add(grass)
+  sand.rotation.x = -Math.PI / 2
+  sand.position.y = 3.02
+  scene.add(sand)
 
   // decorative props
   const props = new THREE.Group()
