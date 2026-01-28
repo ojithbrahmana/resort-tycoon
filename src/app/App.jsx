@@ -19,6 +19,7 @@ import LevelToast from "../ui/LevelToast.jsx"
 const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
 const VILLA_IDS = new Set(["villa", "villa_plus"])
+const REVENUE_LABEL_IDS = new Set(["villa", "villa_plus", "generator"])
 const LOAN_OPTIONS = [
   { principal: 500, rate: 0.1 },
   { principal: 2000, rate: 0.2 },
@@ -212,6 +213,12 @@ export default function App(){
       if (splashRef.current !== "done") return
       if (bankrupt) return
       if (!isCanvasEvent(e)) return
+      if (e.button === 2) {
+        if (modeRef.current === "move" && moveSelectionRef.current) {
+          clearMoveSelection()
+        }
+        return
+      }
       if (modeRef.current === "build") {
         const item = catalogById[toolRef.current]
         if (item?.id === "road") {
@@ -247,7 +254,6 @@ export default function App(){
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mousedown", onMouseDown)
     window.addEventListener("mouseup", onMouseUp)
-
     return () => {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mousedown", onMouseDown)
@@ -729,6 +735,28 @@ export default function App(){
   const splashVisible = splashPhase !== "done"
 
   useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return
+      if (modeRef.current === "move" && moveSelectionRef.current) {
+        clearMoveSelection()
+      }
+    }
+    const onContextMenu = (event) => {
+      if (!isCanvasEvent(event)) return
+      if (modeRef.current === "move" && moveSelectionRef.current) {
+        event.preventDefault()
+        clearMoveSelection()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("contextmenu", onContextMenu)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("contextmenu", onContextMenu)
+    }
+  }, [])
+
+  useEffect(() => {
     let raf
     const tempVec = new THREE.Vector3()
     const updateLabels = () => {
@@ -740,7 +768,7 @@ export default function App(){
       const { camera, renderer } = eng
       const width = renderer.domElement.clientWidth
       const height = renderer.domElement.clientHeight
-      const statuses = economyRef.current.statuses.filter(status => status.incomePerSec > 0)
+      const statuses = economyRef.current.statuses.filter(status => REVENUE_LABEL_IDS.has(status.id))
       const labels = []
       for (const status of statuses) {
         const building = buildingsRef.current.find(b => b.uid === status.uid)
@@ -753,7 +781,7 @@ export default function App(){
           obj.userData.bboxTopY = topY
         }
         const height = building?.bboxHeight ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
-        const offset = Math.max(0.6, height * 0.2)
+        const offset = Math.max(1.1, height * 0.35)
         tempVec.set(obj.position.x, topY + offset, obj.position.z)
         tempVec.project(camera)
         if (
