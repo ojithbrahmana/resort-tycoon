@@ -15,8 +15,6 @@ export default function BuildShop({
   level,
   hidden,
   onClose,
-  progressionLocked,
-  progressionAllowedIds,
 }){
   const visibleItems = items.filter(item => selectedCategory === "All" ? true : item.category === selectedCategory)
   const [jiggleId, setJiggleId] = useState(null)
@@ -65,8 +63,7 @@ export default function BuildShop({
 
       <div className="grid">
         {visibleItems.map(item => {
-          const gated = progressionLocked && !progressionAllowedIds?.has(item.id)
-          const locked = gated || level < item.unlockLevel
+          const locked = level < item.unlockLevel
           return (
             <button
               key={item.id}
@@ -88,7 +85,7 @@ export default function BuildShop({
               <div style={{ fontWeight: 900, color: "#16a34a" }}>${item.cost}</div>
               {locked && (
                 <div className="lock-banner">
-                  {gated ? "Build a Villa + Generator first." : `Unlocks at Level ${item.unlockLevel}`}
+                  {`Unlocks at Level ${item.unlockLevel}`}
                 </div>
               )}
             </button>
