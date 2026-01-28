@@ -244,4 +244,12 @@ export class RoadSystem {
 
     finished.forEach(value => this.bounces.delete(value))
   }
+
+  hasRoad(gx, gz) {
+    return this.roadsSet.has(key(gx, gz))
+  }
+
+  getRoadCells() {
+    return Array.from(this.roadsSet.values()).map(parseKey)
+  }
 }
