@@ -19,7 +19,6 @@ import LevelToast from "../ui/LevelToast.jsx"
 const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
 const VILLA_IDS = new Set(["villa", "villa_plus"])
-const PROGRESSION_REQUIRED = new Set(["villa", "villa_plus", "generator"])
 const LOAN_OPTIONS = [
   { principal: 500, rate: 0.1 },
   { principal: 2000, rate: 0.2 },
@@ -76,8 +75,6 @@ export default function App(){
   const [tutorialDismissed, setTutorialDismissed] = useState(false)
   const [buildShopOpen, setBuildShopOpen] = useState(true)
   const [revenueLabels, setRevenueLabels] = useState([])
-  const [hasBuiltVilla, setHasBuiltVilla] = useState(false)
-  const [hasBuiltGenerator, setHasBuiltGenerator] = useState(false)
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
@@ -527,9 +524,6 @@ export default function App(){
         return "Tile already occupied."
       }
     }
-    if (!(hasBuiltVilla && hasBuiltGenerator) && !PROGRESSION_REQUIRED.has(item.id)) {
-      return "Build a Villa and Generator first."
-    }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
     }
@@ -555,12 +549,6 @@ export default function App(){
     }
     moneyRef.current -= item.cost
     setMoney(prev => prev - item.cost)
-    if (VILLA_IDS.has(item.id)) {
-      setHasBuiltVilla(true)
-    }
-    if (item.id === "generator") {
-      setHasBuiltGenerator(true)
-    }
     addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
     playSound("place")
 
@@ -835,8 +823,6 @@ export default function App(){
               level={progression.level}
               hidden={!buildShopOpen}
               onClose={() => setBuildShopOpen(false)}
-              progressionLocked={!(hasBuiltVilla && hasBuiltGenerator)}
-              progressionAllowedIds={PROGRESSION_REQUIRED}
             />
           </>
         )}
