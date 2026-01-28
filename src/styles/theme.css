@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root {
+  --color-primary: #ff7ac7;
+  --color-secondary: #5b8cff;
+  --color-accent: #ffd447;
+  --color-ink: #2a1d33;
+  --color-surface: #fff6e8;
+  --color-surface-strong: #ffffff;
+  --color-surface-muted: #ffe6f3;
+  --color-success: #2ecc71;
+  --color-danger: #ff5b5b;
+
+  --border-thick: 4px;
+  --border-thin: 2px;
+
+  --radius-sm: 16px;
+  --radius-md: 24px;
+  --radius-lg: 32px;
+
+  --shadow-sticker: 0 8px 0 rgba(37, 20, 48, 0.2), 0 16px 24px rgba(37, 20, 48, 0.18), 0 26px 40px rgba(37, 20, 48, 0.1);
+  --shadow-inner: inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -4px 0 rgba(37, 20, 48, 0.15);
+  --shadow-hover: 0 12px 0 rgba(37, 20, 48, 0.18), 0 18px 30px rgba(37, 20, 48, 0.22), 0 32px 46px rgba(37, 20, 48, 0.12);
+
+  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 26px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+}
+
+body {
+  font-family: var(--font-body);
+}
