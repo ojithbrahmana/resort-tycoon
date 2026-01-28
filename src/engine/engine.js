@@ -4,10 +4,11 @@ import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
 import { ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
-import { createBuildingObject } from "../game/BuildingRenderer.js"
+import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
 
 export function createEngine({ container }){
+  preloadBuildingModels()
   const width = container.clientWidth
   const height = container.clientHeight
 
