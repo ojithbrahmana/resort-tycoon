@@ -1,13 +1,13 @@
 import { GRID_SIZE } from "../game/constants"
 
 export function worldToGrid(x,z){
-  const gx = Math.round(x / GRID_SIZE)
-  const gz = Math.round(z / GRID_SIZE)
+  const gx = Math.floor(x / GRID_SIZE)
+  const gz = Math.floor(z / GRID_SIZE)
   return { gx, gz }
 }
 
 export function gridToWorld(gx,gz){
-  return { x: gx * GRID_SIZE, z: gz * GRID_SIZE }
+  return { x: (gx + 0.5) * GRID_SIZE, z: (gz + 0.5) * GRID_SIZE }
 }
 
 export function key(gx,gz){ return `${gx},${gz}` }

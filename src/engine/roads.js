@@ -1,71 +1,17 @@
 import * as THREE from "three"
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js"
 import { GRID_HALF, GRID_SIZE } from "../game/constants"
 import { gridToWorld, key } from "./grid"
 
 const MAX_ROADS = (GRID_HALF * 2 + 1) ** 2
 
-function createRoundedRectShape(width, height, radius) {
-  const shape = new THREE.Shape()
-  const w = width / 2
-  const h = height / 2
-  const r = Math.min(radius, w, h)
-
-  shape.moveTo(-w + r, -h)
-  shape.lineTo(w - r, -h)
-  shape.absarc(w - r, -h + r, r, -Math.PI / 2, 0, false)
-  shape.lineTo(w, h - r)
-  shape.absarc(w - r, h - r, r, 0, Math.PI / 2, false)
-  shape.lineTo(-w + r, h)
-  shape.absarc(-w + r, h - r, r, Math.PI / 2, Math.PI, false)
-  shape.lineTo(-w, -h + r)
-  shape.absarc(-w + r, -h + r, r, Math.PI, Math.PI * 1.5, false)
-
-  return shape
-}
-
-function createRoundedRectGeometry({ width, height, radius, thickness }) {
-  const shape = createRoundedRectShape(width, height, radius)
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: thickness,
-    bevelEnabled: false,
-  })
-  geometry.rotateX(-Math.PI / 2)
-  return geometry
-}
-
-function createRoadGeometries({ tileSize, roadWidth, radius, thickness }) {
-  const endLength = tileSize / 2 + roadWidth / 2
-  const straight = createRoundedRectGeometry({
-    width: roadWidth,
-    height: tileSize,
-    radius,
-    thickness,
-  })
-
-  const endCap = createRoundedRectGeometry({
-    width: roadWidth,
-    height: endLength,
-    radius,
-    thickness,
-  })
-  endCap.translate(0, 0, tileSize / 4)
-
-  const corner = mergeGeometries([
-    endCap,
-    endCap.clone().rotateY(Math.PI / 2),
-  ])
-
-  const tee = mergeGeometries([
-    straight.clone().rotateY(Math.PI / 2),
-    endCap.clone(),
-  ])
-
-  const cross = mergeGeometries([
-    straight,
-    straight.clone().rotateY(Math.PI / 2),
-  ])
-
+function createRoadGeometries({ tileSize, thickness }) {
+  const tile = new THREE.BoxGeometry(tileSize, thickness, tileSize)
+  tile.translate(0, thickness / 2, 0)
+  const straight = tile.clone()
+  const endCap = tile.clone()
+  const corner = tile.clone()
+  const tee = tile.clone()
+  const cross = tile.clone()
   return { endCap, straight, corner, tee, cross }
 }
 
@@ -119,17 +65,10 @@ export class RoadSystem {
 
     this.y = y
     this.tileSize = tileSize
-    this.roadWidth = tileSize * 0.65
     this.thickness = 0.22
-    this.radius = this.roadWidth * 0.2
     this.maxCount = maxCount
 
-    const geometries = createRoadGeometries({
-      tileSize,
-      roadWidth: this.roadWidth,
-      radius: this.radius,
-      thickness: this.thickness,
-    })
+    const geometries = createRoadGeometries({ tileSize, thickness: this.thickness })
 
     const baseMaterial = new THREE.MeshStandardMaterial({
       color: 0x1f2937,

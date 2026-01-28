@@ -2,11 +2,13 @@ import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
 import { makeBillboardSprite } from "../engine/sprites.js"
+import { GRID_SIZE } from "./constants"
 
 const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 let villaModel = null
 let villaModelPromise = null
+let villaScaleFactor = 1
 
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
@@ -24,6 +26,13 @@ function loadVillaModel() {
         child.receiveShadow = true
       }
     })
+    villaModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(villaModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 4
+    villaScaleFactor = targetFootprint / footprint
     return villaModel
   })
 
@@ -89,6 +98,11 @@ async function createVillaModel() {
     return createVillaMesh({ upgraded: false })
   }
   const clone = model.clone(true)
+  clone.scale.setScalar(villaScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset
   const group = new THREE.Group()
   group.add(createContactShadow(1.6))
   group.add(clone)
