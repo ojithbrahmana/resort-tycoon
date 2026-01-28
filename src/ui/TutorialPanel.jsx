@@ -2,7 +2,7 @@ import React from "react"
 
 export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose }){
   return (
-    <div className="panel guide" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="panel guide">
       <div className="avatar">🐧</div>
       <div className="bubble">
         <button className="guide-close" type="button" onClick={onClose} aria-label="Close tutorial">
@@ -18,7 +18,7 @@ export default function TutorialPanel({ tutorial, onNext, nextJiggle, onClose })
           ))}
         </div>
         <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, opacity: 0.7 }}>
-          Tip: Villas only earn with adjacent roads + power.
+          Tip: Villas only earn with power.
         </div>
         <div style={{ marginTop: 10 }}>
           <button className={`btn ${nextJiggle ? "jiggle" : ""}`} onClick={onNext}>Next</button>

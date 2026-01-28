@@ -1,12 +1,5 @@
 export const steps = [
   { id:"villa", text:"Build a Villa (the money-maker).", done: (s)=> s.buildings.some(b=>b.id==="villa") },
-  { id:"roads", text:"Build 1 Road tile next to the Villa.", done: (s)=> {
-      const v = s.buildings.find(b=>b.id==="villa"); if(!v) return false;
-      const roads = s.buildings.filter(b=>b.id==="road");
-      const adjacent = roads.filter(r => Math.abs(r.gx - v.gx) + Math.abs(r.gz - v.gz) === 1);
-      return adjacent.length >= 1;
-    }
-  },
   { id:"gen", text:"Build a Generator within 6 tiles of the Villa.", done: (s)=> {
       const v = s.buildings.find(b=>b.id==="villa"); if(!v) return false;
       return s.buildings.filter(b=>b.id==="generator").some(g => {

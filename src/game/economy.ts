@@ -1,4 +1,3 @@
-import { neighbors4, key } from "../engine/grid.js"
 import { DEFAULT_POWER_RADIUS } from "./constants"
 import type { BuildingCatalogItem } from "../assets/catalog"
 
@@ -20,10 +19,6 @@ export type EconomyStatus = {
   incomePerSec: number
 }
 
-export function isRoadAdjacent({ gx, gz, roadsSet }: { gx: number; gz: number; roadsSet: Set<string> }){
-  return neighbors4(gx, gz).some(n => roadsSet.has(key(n.gx, n.gz)))
-}
-
 export function isPowered({ gx, gz, generators, powerRadius }: { gx: number; gz: number; generators: BuildingInstance[]; powerRadius: number }){
   for (const g of generators) {
     const dx = gx - g.gx
@@ -35,7 +30,6 @@ export function isPowered({ gx, gz, generators, powerRadius }: { gx: number; gz:
 }
 
 export function computeEconomy({ buildings, catalogById }: { buildings: BuildingInstance[]; catalogById: Record<string, BuildingCatalogItem> }){
-  const roadsSet = new Set(buildings.filter(b => b.id === "road").map(b => key(b.gx, b.gz)))
   const generators = buildings.filter(b => b.id === "generator")
   const generatorRadius = catalogById.generator?.powerRadius ?? DEFAULT_POWER_RADIUS
   const statuses: EconomyStatus[] = []
@@ -46,8 +40,8 @@ export function computeEconomy({ buildings, catalogById }: { buildings: Building
     if (!item) continue
     if (item.incomePerSec <= 0) continue
 
-    // Game rule: buildings only earn if adjacent to road + powered (if required).
-    const roadOk = item.requiresRoad ? isRoadAdjacent({ gx: b.gx, gz: b.gz, roadsSet }) : true
+    // Game rule: buildings only earn if powered (if required).
+    const roadOk = true
     const powerOk = item.requiresPower
       ? isPowered({ gx: b.gx, gz: b.gz, generators, powerRadius: generatorRadius })
       : true

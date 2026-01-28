@@ -17,7 +17,7 @@ export default function ModeBar({ mode, onChange }){
       </button>
       <button className={`modebtn ${mode === "demolish" ? "active" : ""}`} onClick={() => onChange("demolish")}>
         <span>🗑️</span>
-        <small>Trash</small>
+        <small>Demolish</small>
       </button>
     </div>
   )
