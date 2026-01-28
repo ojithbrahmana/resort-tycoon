@@ -47,71 +47,53 @@ button {
 
 .hud {
   position: fixed;
-  left: var(--space-2);
-  right: var(--space-2);
   top: var(--space-2);
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  align-items: center;
-}
-
-.hud-badge {
+  right: var(--space-2);
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  background: var(--color-primary);
-  color: #fff;
-  border-radius: var(--radius-md);
-  padding: 10px 16px;
-  font-family: var(--font-display);
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: var(--shadow-sticker);
+  pointer-events: auto;
+}
+
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: var(--border-thin) solid rgba(36, 15, 54, 0.12);
   font-weight: 800;
-  letter-spacing: 0.5px;
-  border: var(--border-thick) solid rgba(255, 255, 255, 0.5);
-  box-shadow: var(--shadow-inner);
-}
-
-.hud-badge span {
-  font-size: var(--text-lg);
-}
-
-.hud-stats {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: var(--space-2);
-}
-
-.hud-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-strong);
-  border: var(--border-thin) solid rgba(36, 15, 54, 0.1);
-  box-shadow: var(--shadow-inner);
-}
-
-.hud-stat label {
   font-size: var(--text-xs);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  opacity: 0.6;
+  box-shadow: var(--shadow-inner);
+  white-space: nowrap;
 }
 
-.hud-stat strong {
-  font-size: var(--text-lg);
-  font-family: var(--font-display);
-}
-
-.hud-stat strong.bump {
+.hud-pill.bump {
   animation: stat-bounce 0.35s ease-out;
 }
 
-.hud-stat strong.shake {
+.hud-pill.shake {
   animation: stat-shake 0.35s ease-out;
+}
+
+.hud-pill-muted {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.hud-help {
+  cursor: pointer;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: #eff6ff;
+}
+
+.hud-help span {
+  font-size: 11px;
 }
 
 @keyframes stat-bounce {
@@ -385,6 +367,12 @@ button {
   translate: 0 0;
 }
 
+.toast.error {
+  background: #fee2e2;
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #7f1d1d;
+}
+
 .guide {
   position: fixed;
   left: var(--space-2);
@@ -418,6 +406,26 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
+}
+
+.guide-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: #fee2e2;
+  color: #991b1b;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: var(--shadow-inner);
+}
+
+.guide-close:hover {
+  filter: brightness(0.95);
 }
 
 .checklist {
@@ -505,6 +513,7 @@ button {
   color: var(--color-success);
   font-weight: 800;
   margin-left: 6px;
+  font-size: 11px;
 }
 
 .income-pill.negative {
@@ -513,12 +522,8 @@ button {
 
 @media (max-width: 1100px) {
   .hud {
-    grid-template-columns: 1fr;
-    gap: var(--space-1);
-  }
-
-  .hud-stats {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    flex-wrap: wrap;
+    max-width: calc(100% - var(--space-2) * 2);
   }
 
   .drawer {

@@ -5,6 +5,7 @@ import { worldToGrid, gridToWorld, key } from "./grid.js"
 import { ISLAND_RADIUS, GRID_HALF } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject } from "../game/BuildingRenderer.js"
+import { RoadSystem } from "./roads.js"
 
 export function createEngine({ container }){
   const width = container.clientWidth
@@ -23,24 +24,33 @@ export function createEngine({ container }){
 
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2()
+  const groundY = 3.1
 
   const buildGroup = new THREE.Group()
   scene.add(buildGroup)
+  const roadSystem = new RoadSystem({ scene, y: groundY + 0.08 })
 
   const popups = []
   const guests = []
   const villaStatus = new Map()
+  const sparkles = []
+  const placementBounces = []
 
   let ghost = null
   let mode = "build"
   let selectedTool = "villa"
   let onPlace = null
   let onHover = null
+  let onInvalid = null
   let lastTime = performance.now()
+  let shakeTime = 0
+  let shakeDuration = 0.2
+  let shakeStrength = 0.6
 
-  function setHandlers({ onPlaceCb, onHoverCb }){
+  function setHandlers({ onPlaceCb, onHoverCb, onInvalidCb }){
     onPlace = onPlaceCb
     onHover = onHoverCb
+    onInvalid = onInvalidCb
   }
 
   function setMode(next){ mode = next; removeGhost() }
@@ -93,37 +103,73 @@ export function createEngine({ container }){
   }
 
   function handleClick(){
-    if(!ghost || !ghost.userData?.ok) return
+    if(!ghost || !ghost.userData?.ok) {
+      onInvalid?.()
+      return
+    }
     onPlace?.({ gx: ghost.userData.gx, gz: ghost.userData.gz })
+  }
+
+  function makeContactShadow(radius){
+    const geo = new THREE.CircleGeometry(radius, 24)
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    })
+    const shadow = new THREE.Mesh(geo, mat)
+    shadow.rotation.x = -Math.PI / 2
+    shadow.position.y = groundY + 0.03
+    return shadow
   }
 
   async function addBuilding({ building, gx, gz, uid }){
     const { x, z } = gridToWorld(gx,gz)
-    const placeholder = makeBillboardSprite(building.spritePath, building.id === "road" ? 3.0 : 3.6)
-    placeholder.position.set(x, 4.2, z)
+    if (building.id === "road") {
+      roadSystem.addRoad({ gx, gz })
+      return { type: "road", gx, gz, uid }
+    }
+
+    const size = building.id === "road" ? 3.0 : 3.6
+    const placeholder = makeBillboardSprite(building.spritePath, size)
+    placeholder.position.set(x, groundY + size / 2, z)
     placeholder.userData = { gx, gz, uid }
     buildGroup.add(placeholder)
 
     if (building.modelPath) {
       const { object, isModel } = await createBuildingObject({
-        modelPath: building.modelPath,
+        building,
         spritePath: building.spritePath,
-        size: building.id === "road" ? 3.0 : 3.6,
+        size,
       })
       if (isModel) {
         buildGroup.remove(placeholder)
-        object.position.set(x, 3.4, z)
+        object.position.set(x, groundY, z)
         object.userData = { gx, gz, uid }
+        animatePlacement(object)
         buildGroup.add(object)
         return object
       }
     }
 
+    const shadow = makeContactShadow(size * 0.42)
+    shadow.position.set(x, groundY + 0.03, z)
+    buildGroup.add(shadow)
+    placeholder.userData.shadow = shadow
+    animatePlacement(placeholder)
     return placeholder
   }
 
   function removePlacedObject(obj){
     if (!obj) return
+    if (obj.type === "road") {
+      roadSystem.removeRoad({ gx: obj.gx, gz: obj.gz })
+      return
+    }
+    if (obj.userData?.shadow) {
+      buildGroup.remove(obj.userData.shadow)
+    }
     buildGroup.remove(obj)
   }
 
@@ -165,6 +211,31 @@ export function createEngine({ container }){
     popups.push({ sprite: spr, ttl: 1.2, velocity: 1.4 })
   }
 
+  function spawnCoinSparkle({ gx, gz }){
+    const { x, z } = gridToWorld(gx, gz)
+    const geo = new THREE.SphereGeometry(0.2, 10, 10)
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xfacc15,
+      emissiveIntensity: 0.6,
+    })
+    const sparkle = new THREE.Mesh(geo, mat)
+    sparkle.position.set(x + (Math.random() - 0.5) * 0.6, 7.5, z + (Math.random() - 0.5) * 0.6)
+    sparkle.castShadow = false
+    buildGroup.add(sparkle)
+    sparkles.push({ mesh: sparkle, ttl: 0.6, velocity: 1.8 })
+  }
+
+  function animatePlacement(object){
+    if (!object) return
+    object.userData.baseScale = object.scale.clone()
+    placementBounces.push({ object, time: 0, duration: 0.25 })
+  }
+
+  function shakeCamera(){
+    shakeTime = shakeDuration
+  }
+
   function spawnGuest({ path }){
     if (!path || path.length < 2) return
     const sprite = makeIconSprite({ emoji: "🧍", background: "#5b8cff", size: 1.8 })
@@ -189,6 +260,8 @@ export function createEngine({ container }){
   }
 
   function update(delta){
+    roadSystem.update(delta)
+
     for (let i = popups.length - 1; i >= 0; i -= 1) {
       const p = popups[i]
       p.ttl -= delta
@@ -200,11 +273,40 @@ export function createEngine({ container }){
       }
     }
 
+    for (let i = sparkles.length - 1; i >= 0; i -= 1) {
+      const s = sparkles[i]
+      s.ttl -= delta
+      s.mesh.position.y += s.velocity * delta
+      s.mesh.material.opacity = Math.max(0, s.ttl / 0.6)
+      s.mesh.material.transparent = true
+      if (s.ttl <= 0) {
+        buildGroup.remove(s.mesh)
+        sparkles.splice(i, 1)
+      }
+    }
+
     for (const status of villaStatus.values()) {
       status.pulse += delta
       if (status.coin.visible) {
         const scale = 1 + Math.sin(status.pulse * 6) * 0.08
         status.coin.scale.set(scale * 2.2, scale * 2.2, 1)
+      }
+    }
+
+    for (let i = placementBounces.length - 1; i >= 0; i -= 1) {
+      const bounce = placementBounces[i]
+      bounce.time += delta
+      const progress = Math.min(1, bounce.time / bounce.duration)
+      const scalePulse = 1 + Math.sin(progress * Math.PI) * 0.2
+      const baseScale = bounce.object.userData.baseScale || new THREE.Vector3(1, 1, 1)
+      bounce.object.scale.set(
+        baseScale.x * scalePulse,
+        baseScale.y * scalePulse,
+        baseScale.z * scalePulse
+      )
+      if (progress >= 1) {
+        bounce.object.scale.copy(baseScale)
+        placementBounces.splice(i, 1)
       }
     }
 
@@ -234,6 +336,13 @@ export function createEngine({ container }){
     const delta = Math.min(0.05, (now - lastTime) / 1000)
     lastTime = now
     controls.update?.()
+    if (shakeTime > 0) {
+      shakeTime -= delta
+      const strength = shakeStrength * (shakeTime / shakeDuration)
+      camera.position.x += (Math.random() - 0.5) * strength
+      camera.position.y += (Math.random() - 0.5) * strength
+      camera.position.z += (Math.random() - 0.5) * strength
+    }
     update(delta)
     render()
     requestAnimationFrame(tick)
@@ -256,7 +365,9 @@ export function createEngine({ container }){
     removePlacedObject,
     updateVillaStatus,
     spawnPopup,
+    spawnCoinSparkle,
     spawnGuest,
+    shakeCamera,
     getGuestCount: () => guests.length,
   }
 }

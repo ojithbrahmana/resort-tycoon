@@ -53,11 +53,12 @@ export default function App(){
   const [incomeTrend, setIncomeTrend] = useState("stable")
   const [incomeDeltaText, setIncomeDeltaText] = useState("")
   const [buildings, setBuildings] = useState([])
-  const [toast, setToast] = useState("")
+  const [toast, setToast] = useState(null)
   const [levelUp, setLevelUp] = useState(null)
   const [confetti, setConfetti] = useState([])
   const [nextJiggle, setNextJiggle] = useState(false)
   const [progression, setProgression] = useState(createProgressionState())
+  const [tutorialVisible, setTutorialVisible] = useState(true)
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
 
@@ -133,15 +134,16 @@ export default function App(){
       onPlaceCb: ({ gx, gz }) => {
         const item = catalogById[toolRef.current]
         if (!item) return
-        if (occupiedRef.current.has(key(gx, gz))) return
+        if (occupiedRef.current.has(key(gx, gz))) {
+          signalInvalid("Tile already occupied.")
+          return
+        }
         if (levelRef.current < item.unlockLevel) {
-          pop(`Unlocks at Level ${item.unlockLevel}.`)
-          playSound("error")
+          signalInvalid(`Unlocks at Level ${item.unlockLevel}.`)
           return
         }
         if (moneyRef.current < item.cost) {
-          pop("Not enough coins!")
-          playSound("error")
+          signalInvalid("Not enough coins!")
           return
         }
 
@@ -159,6 +161,7 @@ export default function App(){
         pop(`${item.name} placed.`)
       },
       onHoverCb: () => {},
+      onInvalidCb: () => signalInvalid("Can't build there."),
     })
 
     const onMove = (e) => {
@@ -201,6 +204,7 @@ export default function App(){
       const activeVillas = current.statuses.filter(status => VILLA_IDS.has(status.id) && status.active)
       for (const v of activeVillas) {
         eng.spawnPopup({ text: `+$${v.incomePerSec}`, gx: v.gx, gz: v.gz })
+        eng.spawnCoinSparkle({ gx: v.gx, gz: v.gz })
         playSound("coin")
       }
     }, 1000)
@@ -280,9 +284,17 @@ export default function App(){
   }
 
   function pop(msg){
-    setToast(msg)
+    setToast({ message: msg, tone: "info" })
     window.clearTimeout(pop._t)
-    pop._t = window.setTimeout(() => setToast(""), 1600)
+    pop._t = window.setTimeout(() => setToast(null), 1600)
+  }
+
+  function signalInvalid(msg){
+    setToast({ message: msg, tone: "error" })
+    window.clearTimeout(pop._t)
+    pop._t = window.setTimeout(() => setToast(null), 1800)
+    engineRef.current?.shakeCamera()
+    playSound("error")
   }
 
   function setModeSafe(next){
@@ -306,6 +318,7 @@ export default function App(){
           xp={progression.xp}
           xpToNext={progression.xpToNext}
           gems={gems}
+          onReopenTutorial={() => setTutorialVisible(true)}
         />
 
         <ModeBar mode={mode} onChange={setModeSafe} />
@@ -324,17 +337,24 @@ export default function App(){
           hidden={mode !== "build"}
         />
 
-        {toast && <div className="panel toast show">{toast}</div>}
+        {toast?.message && (
+          <div className={`panel toast show ${toast.tone === "error" ? "error" : ""}`}>
+            {toast.message}
+          </div>
+        )}
 
-        <TutorialPanel
-          tutorial={tutorial}
-          nextJiggle={nextJiggle}
-          onNext={() => {
-            setNextJiggle(true)
-            window.clearTimeout(setNextJiggle._t)
-            setNextJiggle._t = window.setTimeout(() => setNextJiggle(false), 400)
-          }}
-        />
+        {tutorialVisible && (
+          <TutorialPanel
+            tutorial={tutorial}
+            nextJiggle={nextJiggle}
+            onNext={() => {
+              setNextJiggle(true)
+              window.clearTimeout(setNextJiggle._t)
+              setNextJiggle._t = window.setTimeout(() => setNextJiggle(false), 400)
+            }}
+            onClose={() => setTutorialVisible(false)}
+          />
+        )}
 
         <LevelToast levelUp={levelUp} onDismiss={() => setLevelUp(null)} />
 
