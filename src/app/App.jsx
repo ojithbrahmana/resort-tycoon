@@ -1,190 +1,371 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createEngine } from "../engine/engine.js"
-import { CATALOG, CATEGORIES } from "../data/catalog.js"
 import { key } from "../engine/grid.js"
-import { computeIncomePerSecond } from "../engine/economy.js"
-import { computeTutorialProgress } from "../engine/tutorial.js"
+import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutorial.js"
+import { computeEconomy } from "../game/economy"
+import { createProgressionState, applyXp, XP_REWARDS } from "../game/progression"
+import { CATALOG, CATEGORIES } from "../assets/catalog"
+import { INCOME_TICK_MS, INCOME_XP_INTERVAL_MS } from "../game/constants"
+import { playSound } from "../game/sound"
+import { findPath, findRoadAnchor } from "../game/guests"
+import HUD from "../ui/HUD.jsx"
+import ModeBar from "../ui/ModeBar.jsx"
+import BuildShop from "../ui/BuildShop.jsx"
+import TutorialPanel from "../ui/TutorialPanel.jsx"
+import LevelToast from "../ui/LevelToast.jsx"
 
-const catalogById = Object.fromEntries(CATALOG.map(i => [i.id, i]))
+const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
-function clamp(n,a,b){ return Math.max(a, Math.min(b,n)) }
+const VILLA_IDS = new Set(["villa", "villa_plus"])
+
+function createUid(prefix){
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function makeConfetti(){
+  return Array.from({ length: 14 }).map((_, index) => ({
+    id: `${Date.now()}-${index}`,
+    left: `${10 + Math.random() * 80}%`,
+    top: `${Math.random() * 20}%`,
+    delay: Math.random() * 0.3,
+  }))
+}
 
 export default function App(){
   const viewportRef = useRef(null)
   const engineRef = useRef(null)
+  const toolRef = useRef("villa")
+  const modeRef = useRef("build")
+  const occupiedRef = useRef(new Set())
+  const buildingsRef = useRef([])
+  const economyRef = useRef({ total: 0, statuses: [] })
+  const moneyRef = useRef(1000)
+  const levelRef = useRef(1)
 
-  const [mode, setMode] = useState("build") // build | move | demolish
+  const [mode, setMode] = useState("build")
   const [category, setCategory] = useState("All")
   const [tool, setTool] = useState("villa")
-
   const [money, setMoney] = useState(1000)
-  const [buildings, setBuildings] = useState([]) // {id,gx,gz,cost,sprite, meshRef}
-  const [toast, setToast] = useState("")
-  const [hover, setHover] = useState(null)
+  const [moneyDisplay, setMoneyDisplay] = useState(1000)
+  const [moneyBump, setMoneyBump] = useState(false)
+  const [gems] = useState(12)
+  const [incomeTrend, setIncomeTrend] = useState("stable")
+  const [incomeDeltaText, setIncomeDeltaText] = useState("")
+  const [buildings, setBuildings] = useState([])
+  const [toast, setToast] = useState({ message: "", tone: "info" })
+  const [tutorialVisible, setTutorialVisible] = useState(true)
+  const [levelUp, setLevelUp] = useState(null)
+  const [confetti, setConfetti] = useState([])
+  const [nextJiggle, setNextJiggle] = useState(false)
+  const [progression, setProgression] = useState(createProgressionState())
+  const earningOnceRef = useRef(new Set())
+  const lastIncomeRef = useRef(0)
 
-  const occupiedKeys = useMemo(()=>{
+  toolRef.current = tool
+  modeRef.current = mode
+  buildingsRef.current = buildings
+  moneyRef.current = money
+  levelRef.current = progression.level
+
+  useEffect(() => {
     const s = new Set()
-    for(const b of buildings) s.add(key(b.gx,b.gz))
-    return s
+    for (const b of buildings) s.add(key(b.gx, b.gz))
+    occupiedRef.current = s
   }, [buildings])
 
-  const income = useMemo(()=> computeIncomePerSecond({ buildings, catalogById }), [buildings])
+  const economy = useMemo(()=> computeEconomy({ buildings, catalogById }), [buildings])
+  economyRef.current = economy
 
-  const tutorial = useMemo(()=> computeTutorialProgress({ buildings }), [buildings])
+  const tutorialProgress = useMemo(() => computeTutorialProgress({ buildings }), [buildings])
+  const tutorial = useMemo(() => ({
+    message: tutorialProgress.message,
+    completed: tutorialProgress.completed,
+    steps: tutorialSteps.map(step => step.text),
+  }), [tutorialProgress])
 
-  // engine boot
-  useEffect(()=>{
-    if(!viewportRef.current) return
+  useEffect(() => {
+    const prev = lastIncomeRef.current
+    if (economy.total !== prev) {
+      const diff = economy.total - prev
+      setIncomeTrend(diff > 0 ? "up" : "down")
+      setIncomeDeltaText(` ${diff > 0 ? "+" : ""}${diff}/sec`)
+      window.clearTimeout(setIncomeTrend._t)
+      setIncomeTrend._t = window.setTimeout(() => {
+        setIncomeTrend("stable")
+        setIncomeDeltaText("")
+      }, 600)
+      lastIncomeRef.current = economy.total
+    }
+  }, [economy.total])
+
+  useEffect(() => {
+    const start = moneyDisplay
+    const startTime = performance.now()
+    const duration = 400
+    let raf
+
+    const animate = (now) => {
+      const progress = Math.min(1, (now - startTime) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const value = Math.round(start + (money - start) * eased)
+      setMoneyDisplay(value)
+      if (progress < 1) {
+        raf = requestAnimationFrame(animate)
+      }
+    }
+
+    if (money !== moneyDisplay) {
+      setMoneyBump(true)
+      window.clearTimeout(setMoneyBump._t)
+      setMoneyBump._t = window.setTimeout(() => setMoneyBump(false), 400)
+    }
+
+    raf = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(raf)
+  }, [money])
+
+  useEffect(() => {
+    if (!viewportRef.current) return
     const eng = createEngine({ container: viewportRef.current })
     engineRef.current = eng
 
-    // wire handlers
     eng.setHandlers({
       onPlaceCb: ({ gx, gz }) => {
-        const item = catalogById[tool]
-        if(!item) return
-        if(occupiedKeys.has(key(gx,gz))) return
-        if(money < item.cost){ pop("Not enough cash. Capitalism strikes again."); return }
+        const item = catalogById[toolRef.current]
+        if (!item) return
+        if (occupiedRef.current.has(key(gx, gz))) {
+          invalidAction("That tile is already occupied.")
+          return
+        }
+        if (levelRef.current < item.unlockLevel) {
+          invalidAction(`Unlocks at Level ${item.unlockLevel}.`)
+          return
+        }
+        if (moneyRef.current < item.cost) {
+          invalidAction("Not enough coins!")
+          return
+        }
 
-        // place sprite
-        const spr = eng.addPlacedSprite({ spriteUrl: item.sprite, gx, gz })
-        const b = { id: item.id, name:item.name, gx, gz, cost: item.cost, sprite:item.sprite, _sprite: spr }
-        setBuildings(prev => [...prev, b])
+        const uid = createUid(item.id)
+        const entry = { uid, id: item.id, gx, gz, cost: item.cost, object: null }
+        setBuildings(prev => [...prev, entry])
         setMoney(prev => prev - item.cost)
+        addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
+        playSound("place")
+
+        const obj = eng.addBuilding({ building: item, gx, gz, uid })
+        setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj } : b))
+
         pop(`${item.name} placed.`)
       },
-      onHoverCb: (h) => setHover(h)
+      onHoverCb: () => {},
     })
 
-    // mouse listeners that need fresh state: attach on window and read refs via closures
-    const onMove = (e)=>{
+    const onMove = (e) => {
       const current = engineRef.current
-      if(!current) return
-      if(mode !== "build") return
-      const item = catalogById[tool]
-      current.handleMouseMove(e, { spriteUrl: item?.sprite ?? "/sprites/villa.png", occupiedKeys })
+      if (!current) return
+      if (modeRef.current !== "build") return
+      const item = catalogById[toolRef.current]
+      current.handleMouseMove(e, { spriteUrl: item?.spritePath ?? "/sprites/villa.png", occupiedKeys: occupiedRef.current })
     }
-    const onClick = (e)=>{
+    const onClick = (e) => {
       const current = engineRef.current
-      if(!current) return
-      if(mode !== "build") return
+      if (!current) return
+      if (modeRef.current !== "build") return
       current.handleClick(e)
     }
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mousedown", onClick)
 
-    return ()=>{
+    return () => {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mousedown", onClick)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportRef])
 
-  // income tick
-  useEffect(()=>{
-    const t = setInterval(()=>{
-      if(income.total > 0){
-        setMoney(m => m + income.total)
+  useEffect(() => {
+    const eng = engineRef.current
+    if (!eng) return
+    economy.statuses.forEach(status => {
+      if (!VILLA_IDS.has(status.id)) return
+      eng.updateVillaStatus(status)
+    })
+  }, [economy.statuses])
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const eng = engineRef.current
+      const current = economyRef.current
+      if (!eng) return
+      const activeVillas = current.statuses.filter(status => VILLA_IDS.has(status.id) && status.active)
+      for (const v of activeVillas) {
+        eng.spawnPopup({ text: `+$${v.incomePerSec}`, gx: v.gx, gz: v.gz })
+        eng.spawnSparkle({ gx: v.gx, gz: v.gz })
+        playSound("coin")
       }
     }, 1000)
-    return ()=> clearInterval(t)
-  }, [income.total])
+    return () => clearInterval(t)
+  }, [])
 
-  // toast helper
+  useEffect(() => {
+    const t = setInterval(() => {
+      const eng = engineRef.current
+      if (!eng) return
+      const current = economyRef.current
+      if (current.total <= 0) return
+      if (eng.getGuestCount() > 12) return
+
+      const roadsSet = new Set(buildingsRef.current.filter(b => b.id === "road").map(b => key(b.gx, b.gz)))
+      const destinations = buildingsRef.current.filter(b => {
+        const item = catalogById[b.id]
+        return item && ["Decor", "Utility"].includes(item.category)
+      })
+
+      const activeVillas = current.statuses.filter(status => VILLA_IDS.has(status.id) && status.active)
+      if (!activeVillas.length || !destinations.length || roadsSet.size === 0) return
+
+      const source = activeVillas[Math.floor(Math.random() * activeVillas.length)]
+      const targetBuilding = destinations[Math.floor(Math.random() * destinations.length)]
+      const start = findRoadAnchor({ gx: source.gx, gz: source.gz, roadsSet })
+      const goal = findRoadAnchor({ gx: targetBuilding.gx, gz: targetBuilding.gz, roadsSet })
+      if (!start || !goal) return
+      const path = findPath({ start, goal, roadsSet })
+      if (!path) return
+      const back = [...path].reverse().slice(1)
+      eng.spawnGuest({ path: [...path, ...back] })
+    }, 4000)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (economy.total > 0) {
+        setMoney(prev => prev + economy.total)
+      }
+    }, INCOME_TICK_MS)
+    return () => clearInterval(t)
+  }, [economy.total])
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (economy.total > 0) {
+        addXp(XP_REWARDS.POSITIVE_INCOME_TICK)
+      }
+    }, INCOME_XP_INTERVAL_MS)
+    return () => clearInterval(t)
+  }, [economy.total])
+
+  useEffect(() => {
+    for (const status of economy.statuses) {
+      if (!VILLA_IDS.has(status.id)) continue
+      if (!status.active) continue
+      if (earningOnceRef.current.has(status.uid)) continue
+      earningOnceRef.current.add(status.uid)
+      addXp(XP_REWARDS.VILLA_EARNING_FIRST)
+    }
+  }, [economy.statuses])
+
+  function addXp(amount){
+    setProgression(prev => {
+      const result = applyXp(prev, amount)
+      if (result.leveledUp) {
+        const unlocked = CATALOG.filter(item => item.unlockLevel > prev.level && item.unlockLevel <= result.next.level)
+        setLevelUp({ level: result.next.level, unlocked })
+        setConfetti(makeConfetti())
+        window.clearTimeout(setConfetti._t)
+        setConfetti._t = window.setTimeout(() => setConfetti([]), 1400)
+      }
+      return result.next
+    })
+  }
+
   function pop(msg){
-    setToast(msg)
+    setToast({ message: msg, tone: "info" })
     window.clearTimeout(pop._t)
-    pop._t = window.setTimeout(()=>setToast(""), 1400)
+    pop._t = window.setTimeout(() => setToast({ message: "", tone: "info" }), 1600)
   }
 
-  // UI handlers
-  function setModeSafe(m){
-    setMode(m)
-    const eng = engineRef.current
-    eng?.setMode(m)
+  function invalidAction(msg){
+    setToast({ message: msg, tone: "error" })
+    window.clearTimeout(pop._t)
+    pop._t = window.setTimeout(() => setToast({ message: "", tone: "info" }), 1600)
+    playSound("error")
+    engineRef.current?.shakeCamera()
   }
 
-  const visibleItems = CATALOG.filter(i => category==="All" ? true : i.category===category)
+  function setModeSafe(next){
+    setMode(next)
+    engineRef.current?.setMode(next)
+  }
+
+  const moneyDisplayState = { value: moneyDisplay.toLocaleString(), bump: moneyBump }
+  const incomeDisplayState = { value: economy.total, deltaText: incomeDeltaText }
 
   return (
     <>
-      <div ref={viewportRef} style={{ position:"fixed", inset:0 }} />
+      <div ref={viewportRef} style={{ position: "fixed", inset: 0 }} />
 
       <div className="ui">
-        <div className="panel hud">
-          <div style={{display:"flex", flexDirection:"column"}}>
-            <div className="title">Resort Tycoon</div>
-            <div style={{fontSize:12, fontWeight:900, opacity:.6}}>Island prototype</div>
-          </div>
-          <div style={{width:2, height:44, background:"rgba(0,0,0,.08)", borderRadius:99}} />
-          <div className="stat">
-            <div className="label">Money</div>
-            <div className="value">${money.toLocaleString()}</div>
-          </div>
-          <div className="stat">
-            <div className="label">Income/sec</div>
-            <div className="value">${income.total}</div>
-          </div>
-        </div>
+        <HUD
+          money={moneyDisplayState}
+          income={incomeDisplayState}
+          incomeTrend={incomeTrend}
+          level={progression.level}
+          xp={progression.xp}
+          xpToNext={progression.xpToNext}
+          gems={gems}
+          onHelp={() => setTutorialVisible(true)}
+        />
 
-        <div className="panel modebar">
-          <button className={"modebtn "+(mode==="build"?"active":"")} onClick={()=>setModeSafe("build")} title="Build (B)">
-            🧱 <div style={{fontSize:12, fontWeight:900}}>Build</div>
-          </button>
-          <button className={"modebtn "+(mode==="move"?"active":"")} onClick={()=>setModeSafe("move")} title="Move (M)">
-            ✋ <div style={{fontSize:12, fontWeight:900}}>Move</div>
-          </button>
-          <button className={"modebtn "+(mode==="demolish"?"active":"")} onClick={()=>setModeSafe("demolish")} title="Demolish (X)">
-            🗑️ <div style={{fontSize:12, fontWeight:900}}>Trash</div>
-          </button>
-        </div>
+        <ModeBar mode={mode} onChange={setModeSafe} />
 
-        <div className={"panel drawer "+(mode==="build" ? "" : "hidden")}>
-          <header>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline"}}>
-              <div style={{fontSize:22, fontWeight:1000}}>Build</div>
-              <div style={{fontSize:12, fontWeight:900, opacity:.6}}>Click island to place</div>
-            </div>
-          </header>
+        <BuildShop
+          items={CATALOG}
+          categories={CATEGORIES}
+          selectedCategory={category}
+          onSelectCategory={setCategory}
+          selectedTool={tool}
+          onSelectTool={(id) => {
+            setTool(id)
+            engineRef.current?.setTool(id)
+          }}
+          level={progression.level}
+          hidden={mode !== "build"}
+        />
 
-          <div className="chips">
-            {CATEGORIES.map(c=>(
-              <button key={c} className={"chip "+(category===c?"active":"")} onClick={()=>setCategory(c)}>{c}</button>
+        {toast.message && (
+          <div className={`panel toast show ${toast.tone === "error" ? "toast-error" : ""}`}>
+            {toast.message}
+          </div>
+        )}
+
+        {tutorialVisible && (
+          <TutorialPanel
+            tutorial={tutorial}
+            nextJiggle={nextJiggle}
+            onNext={() => {
+              setNextJiggle(true)
+              window.clearTimeout(setNextJiggle._t)
+              setNextJiggle._t = window.setTimeout(() => setNextJiggle(false), 400)
+            }}
+            onClose={() => setTutorialVisible(false)}
+          />
+        )}
+
+        <LevelToast levelUp={levelUp} onDismiss={() => setLevelUp(null)} />
+
+        {confetti.length > 0 && (
+          <div className="confetti">
+            {confetti.map(piece => (
+              <span
+                key={piece.id}
+                style={{ left: piece.left, top: piece.top, animationDelay: `${piece.delay}s` }}
+              />
             ))}
           </div>
-
-          <div className="grid">
-            {visibleItems.map(item=>(
-              <button key={item.id} className={"card "+(tool===item.id?"active":"")} onClick={()=>setTool(item.id)}>
-                <div className="thumb">
-                  <img src={item.sprite} alt="" style={{width:56, height:56, imageRendering:"auto"}} />
-                </div>
-                <div style={{fontWeight:1000}}>{item.name}</div>
-                <div style={{fontWeight:1000, color:"#10b981"}}>${item.cost}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className={"panel toast "+(toast ? "show" : "")}>{toast || " "}</div>
-
-        <div className="panel guide">
-          <div className="avatar">🐧</div>
-          <div className="bubble">
-            <div style={{fontWeight:1000}}>{tutorial.message}</div>
-            <div className="checklist">
-              {["Build a Villa","Add 3 Roads next to it","Place a Generator nearby"].map((t,i)=>(
-                <div key={t} className={"check "+(tutorial.completed[i] ? "done":"")}>
-                  <span className="box">{tutorial.completed[i] ? "✓" : ""}</span>
-                  <span>{t}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{marginTop:8, fontSize:12, fontWeight:900, opacity:.6}}>
-              Tip: Villas only earn if they have a road next to them and power nearby.
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </>
   )

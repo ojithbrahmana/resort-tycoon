@@ -16,12 +16,25 @@ export function attachCameraControls({ dom, camera }){
   let theta = Math.PI/4
   let phi = 0.85
 
+  let shakeTime = 0
+  let shakeStrength = 0
+
   function update(){
     const x = target.x + radius * Math.sin(phi) * Math.sin(theta)
     const z = target.z + radius * Math.sin(phi) * Math.cos(theta)
     const y = target.y + radius * Math.cos(phi)
-    camera.position.set(x,y,z)
+    const shakeOffset = shakeTime > 0
+      ? new THREE.Vector3(
+        (Math.random() - 0.5) * shakeStrength,
+        (Math.random() - 0.5) * shakeStrength * 0.6,
+        (Math.random() - 0.5) * shakeStrength
+      )
+      : new THREE.Vector3(0, 0, 0)
+    camera.position.set(x + shakeOffset.x, y + shakeOffset.y, z + shakeOffset.z)
     camera.lookAt(target)
+    if (shakeTime > 0) {
+      shakeTime -= 0.016
+    }
   }
   update()
 
@@ -55,5 +68,10 @@ export function attachCameraControls({ dom, camera }){
     update()
   }, { passive:true })
 
-  return { update }
+  function shake(strength = 0.6){
+    shakeTime = 0.18
+    shakeStrength = strength
+  }
+
+  return { update, shake }
 }
