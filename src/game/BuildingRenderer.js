@@ -21,7 +21,7 @@ let palmScaleFactor = 1
 let spaModel = null
 let spaModelPromise = null
 let spaScaleFactor = 1
-const MODEL_BRIGHTNESS_FACTOR = 1.15
+const MODEL_BRIGHTNESS_FACTOR = 1.35
 
 function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
   object.traverse((child) => {
