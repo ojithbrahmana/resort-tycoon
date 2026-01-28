@@ -5,14 +5,22 @@ import { makeBillboardSprite } from "../engine/sprites.js"
 import { GRID_SIZE } from "./constants"
 
 const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.url).toString()
+const ICECREAM_MODEL_URL = new URL("../assets/models/icecream.final.glb", import.meta.url).toString()
 const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
+const SPA_MODEL_URL = new URL("../assets/models/spa.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 let villaModel = null
 let villaModelPromise = null
 let villaScaleFactor = 1
+let iceCreamModel = null
+let iceCreamModelPromise = null
+let iceCreamScaleFactor = 1
 let palmModel = null
 let palmModelPromise = null
 let palmScaleFactor = 1
+let spaModel = null
+let spaModelPromise = null
+let spaScaleFactor = 1
 
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
@@ -44,7 +52,7 @@ function loadVillaModel() {
 }
 
 export function preloadBuildingModels() {
-  return Promise.all([loadVillaModel(), loadPalmModel()])
+  return Promise.all([loadVillaModel(), loadPalmModel(), loadIceCreamModel(), loadSpaModel()])
 }
 
 function createContactShadow(radius) {
@@ -109,6 +117,52 @@ async function createVillaModel() {
   clone.position.y += yOffset
   const group = new THREE.Group()
   group.add(createContactShadow(1.6))
+  group.add(clone)
+  return group
+}
+
+function loadIceCreamModel() {
+  if (iceCreamModelPromise) return iceCreamModelPromise
+
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+
+  iceCreamModelPromise = loader.loadAsync(ICECREAM_MODEL_URL).then((gltf) => {
+    iceCreamModel = gltf.scene
+    iceCreamModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    iceCreamModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(iceCreamModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 3
+    iceCreamScaleFactor = targetFootprint / footprint
+    return iceCreamModel
+  })
+
+  return iceCreamModelPromise
+}
+
+async function createIceCreamModel() {
+  const model = await loadIceCreamModel()
+  if (!model) {
+    return new THREE.Group()
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(iceCreamScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset
+  const group = new THREE.Group()
+  group.add(createContactShadow(2.2))
   group.add(clone)
   return group
 }
@@ -193,9 +247,59 @@ async function createPalmModel() {
   return group
 }
 
+function loadSpaModel() {
+  if (spaModelPromise) return spaModelPromise
+
+  const loader = new GLTFLoader()
+  const dracoLoader = new DRACOLoader()
+  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
+  loader.setDRACOLoader(dracoLoader)
+
+  spaModelPromise = loader.loadAsync(SPA_MODEL_URL).then((gltf) => {
+    spaModel = gltf.scene
+    spaModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    spaModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(spaModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 4
+    spaScaleFactor = targetFootprint / footprint
+    return spaModel
+  })
+
+  return spaModelPromise
+}
+
+async function createSpaModel() {
+  const model = await loadSpaModel()
+  if (!model) {
+    return new THREE.Group()
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(spaScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset
+  const group = new THREE.Group()
+  group.add(createContactShadow(2.8))
+  group.add(clone)
+  return group
+}
+
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa" || building?.id === "villa_plus") {
     const object = await createVillaModel()
+    return { object, isModel: true }
+  }
+  if (building?.id === "icecream_parlour") {
+    const object = await createIceCreamModel()
     return { object, isModel: true }
   }
   if (building?.id === "generator") {
@@ -203,6 +307,10 @@ export async function createBuildingObject({ building, spritePath, size = 3.6 })
   }
   if (building?.id === "palm") {
     const object = await createPalmModel()
+    return { object, isModel: true }
+  }
+  if (building?.id === "spa") {
+    const object = await createSpaModel()
     return { object, isModel: true }
   }
 
