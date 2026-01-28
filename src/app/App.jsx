@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createEngine } from "../engine/engine.js"
-import { key } from "../engine/grid.js"
+import { gridToWorld, key } from "../engine/grid.js"
 import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutorial.js"
 import { computeEconomy } from "../game/economy"
 import { createProgressionState, applyXp, XP_REWARDS } from "../game/progression"
 import { CATALOG, CATEGORIES } from "../assets/catalog"
-import { INCOME_TICK_MS, INCOME_XP_INTERVAL_MS } from "../game/constants"
+import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, ISLAND_RADIUS } from "../game/constants"
 import { playSound } from "../game/sound"
 import { findPath, findRoadAnchor } from "../game/guests"
 import HUD from "../ui/HUD.jsx"
@@ -42,6 +42,8 @@ export default function App(){
   const economyRef = useRef({ total: 0, statuses: [] })
   const moneyRef = useRef(1000)
   const levelRef = useRef(1)
+  const hoverRef = useRef(null)
+  const dragRef = useRef({ active: false, start: null, axis: null, placed: new Set() })
 
   const [mode, setMode] = useState("build")
   const [category, setCategory] = useState("All")
@@ -49,7 +51,6 @@ export default function App(){
   const [money, setMoney] = useState(1000)
   const [moneyDisplay, setMoneyDisplay] = useState(1000)
   const [moneyBump, setMoneyBump] = useState(false)
-  const [gems] = useState(12)
   const [incomeTrend, setIncomeTrend] = useState("stable")
   const [incomeDeltaText, setIncomeDeltaText] = useState("")
   const [buildings, setBuildings] = useState([])
@@ -134,33 +135,15 @@ export default function App(){
       onPlaceCb: ({ gx, gz }) => {
         const item = catalogById[toolRef.current]
         if (!item) return
-        if (occupiedRef.current.has(key(gx, gz))) {
-          signalInvalid("Tile already occupied.")
-          return
-        }
-        if (levelRef.current < item.unlockLevel) {
-          signalInvalid(`Unlocks at Level ${item.unlockLevel}.`)
-          return
-        }
-        if (moneyRef.current < item.cost) {
-          signalInvalid("Not enough coins!")
-          return
-        }
-
-        const uid = createUid(item.id)
-        const entry = { uid, id: item.id, gx, gz, cost: item.cost, object: null }
-        setBuildings(prev => [...prev, entry])
-        setMoney(prev => prev - item.cost)
-        addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
-        playSound("place")
-
-        void eng.addBuilding({ building: item, gx, gz, uid }).then(obj => {
-          setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj } : b))
-        })
-
-        pop(`${item.name} placed.`)
+        placeBuilding({ item, gx, gz })
       },
-      onHoverCb: () => {},
+      onHoverCb: (data) => {
+        hoverRef.current = data
+        if (!data) return
+        if (!dragRef.current.active) return
+        if (toolRef.current !== "road") return
+        handleDragPlacement(data)
+      },
       onInvalidCb: () => signalInvalid("Can't build there."),
     })
 
@@ -169,20 +152,43 @@ export default function App(){
       if (!current) return
       if (modeRef.current !== "build") return
       const item = catalogById[toolRef.current]
-      current.handleMouseMove(e, { spriteUrl: item?.spritePath ?? "/sprites/villa.png", occupiedKeys: occupiedRef.current })
+      current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupiedRef.current })
     }
-    const onClick = (e) => {
+    const onMouseDown = (e) => {
       const current = engineRef.current
       if (!current) return
       if (modeRef.current !== "build") return
+      const item = catalogById[toolRef.current]
+      if (item?.id === "road") {
+        const hover = hoverRef.current
+        if (!hover) return
+        if (!hover.ok) {
+          signalInvalid("Can't build there.")
+          return
+        }
+        startDrag(hover)
+        const startResult = placeBuilding({ item, gx: hover.gx, gz: hover.gz })
+        if (startResult.placed) {
+          dragRef.current.placed.add(key(hover.gx, hover.gz))
+        } else {
+          stopDrag()
+          return
+        }
+        return
+      }
       current.handleClick(e)
     }
+    const onMouseUp = () => {
+      stopDrag()
+    }
     window.addEventListener("mousemove", onMove)
-    window.addEventListener("mousedown", onClick)
+    window.addEventListener("mousedown", onMouseDown)
+    window.addEventListener("mouseup", onMouseUp)
 
     return () => {
       window.removeEventListener("mousemove", onMove)
-      window.removeEventListener("mousedown", onClick)
+      window.removeEventListener("mousedown", onMouseDown)
+      window.removeEventListener("mouseup", onMouseUp)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportRef])
@@ -302,6 +308,104 @@ export default function App(){
     engineRef.current?.setMode(next)
   }
 
+  function withinIsland(gx, gz){
+    const { x, z } = gridToWorld(gx, gz)
+    return Math.sqrt(x * x + z * z) <= (ISLAND_RADIUS - 3)
+  }
+
+  function isWithinGrid(gx, gz){
+    return Math.abs(gx) <= GRID_HALF && Math.abs(gz) <= GRID_HALF
+  }
+
+  function validatePlacement({ item, gx, gz }){
+    if (!isWithinGrid(gx, gz) || !withinIsland(gx, gz)) {
+      return "Can't build there."
+    }
+    if (occupiedRef.current.has(key(gx, gz))) {
+      return "Tile already occupied."
+    }
+    if (levelRef.current < item.unlockLevel) {
+      return `Unlocks at Level ${item.unlockLevel}.`
+    }
+    if (moneyRef.current < item.cost) {
+      return "Not enough coins!"
+    }
+    return null
+  }
+
+  function placeBuilding({ item, gx, gz, silentInvalid = false }){
+    const reason = validatePlacement({ item, gx, gz })
+    if (reason) {
+      if (!silentInvalid) signalInvalid(reason)
+      return { placed: false, reason }
+    }
+
+    const uid = createUid(item.id)
+    const entry = { uid, id: item.id, gx, gz, cost: item.cost, object: null }
+    setBuildings(prev => [...prev, entry])
+    occupiedRef.current.add(key(gx, gz))
+    moneyRef.current -= item.cost
+    setMoney(prev => prev - item.cost)
+    addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
+    playSound("place")
+
+    void engineRef.current?.addBuilding({ building: item, gx, gz, uid }).then(obj => {
+      setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj } : b))
+    })
+
+    pop(`${item.name} placed.`)
+    return { placed: true, reason: null }
+  }
+
+  function startDrag({ gx, gz }){
+    dragRef.current = { active: true, start: { gx, gz }, axis: null, placed: new Set() }
+  }
+
+  function stopDrag(){
+    dragRef.current = { active: false, start: null, axis: null, placed: new Set() }
+  }
+
+  function getLineCells(start, end, axis){
+    if (axis === "x") {
+      const min = Math.min(start.gx, end.gx)
+      const max = Math.max(start.gx, end.gx)
+      return Array.from({ length: max - min + 1 }, (_, idx) => ({ gx: min + idx, gz: start.gz }))
+    }
+    if (axis === "z") {
+      const min = Math.min(start.gz, end.gz)
+      const max = Math.max(start.gz, end.gz)
+      return Array.from({ length: max - min + 1 }, (_, idx) => ({ gx: start.gx, gz: min + idx }))
+    }
+    return []
+  }
+
+  function handleDragPlacement({ gx, gz }){
+    const drag = dragRef.current
+    if (!drag.active || !drag.start) return
+    if (!drag.axis) {
+      const dx = gx - drag.start.gx
+      const dz = gz - drag.start.gz
+      if (dx === 0 && dz === 0) return
+      drag.axis = Math.abs(dx) >= Math.abs(dz) ? "x" : "z"
+    }
+    const cells = getLineCells(drag.start, { gx, gz }, drag.axis)
+    for (const cell of cells) {
+      const cellKey = key(cell.gx, cell.gz)
+      if (drag.placed.has(cellKey)) continue
+      drag.placed.add(cellKey)
+      const item = catalogById.road
+      if (!isWithinGrid(cell.gx, cell.gz) || !withinIsland(cell.gx, cell.gz)) {
+        continue
+      }
+      const result = placeBuilding({ item, gx: cell.gx, gz: cell.gz, silentInvalid: true })
+      if (!result.placed && result.reason && result.reason !== "Tile already occupied.") {
+        signalInvalid(result.reason)
+        stopDrag()
+        break
+      }
+    }
+  }
+
   const moneyDisplayState = { value: moneyDisplay.toLocaleString(), bump: moneyBump }
   const incomeDisplayState = { value: economy.total, deltaText: incomeDeltaText }
 
@@ -317,7 +421,6 @@ export default function App(){
           level={progression.level}
           xp={progression.xp}
           xpToNext={progression.xpToNext}
-          gems={gems}
           onReopenTutorial={() => setTutorialVisible(true)}
         />
 
