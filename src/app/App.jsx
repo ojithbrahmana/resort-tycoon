@@ -228,6 +228,12 @@ export default function App(){
   }, [splashPhase])
 
   useEffect(() => {
+    if (mode !== "build" && buildShopOpen) {
+      setBuildShopOpen(false)
+    }
+  }, [mode, buildShopOpen])
+
+  useEffect(() => {
     const eng = engineRef.current
     if (!eng) return
     economy.statuses.forEach(status => {
@@ -556,30 +562,34 @@ export default function App(){
 
         <ModeBar mode={mode} onChange={setModeSafe} />
 
-        <BuildShop
-          items={CATALOG}
-          categories={CATEGORIES}
-          selectedCategory={category}
-          onSelectCategory={setCategory}
-          selectedTool={tool}
-          onSelectTool={(id) => {
-            setTool(id)
-            engineRef.current?.setTool(id)
-          }}
-          level={progression.level}
-          hidden={mode !== "build" || !buildShopOpen}
-          onClose={() => setBuildShopOpen(false)}
-        />
+        {mode === "build" && (
+          <>
+            <BuildShop
+              items={CATALOG}
+              categories={CATEGORIES}
+              selectedCategory={category}
+              onSelectCategory={setCategory}
+              selectedTool={tool}
+              onSelectTool={(id) => {
+                setTool(id)
+                engineRef.current?.setTool(id)
+              }}
+              level={progression.level}
+              hidden={!buildShopOpen}
+              onClose={() => setBuildShopOpen(false)}
+            />
 
-        {mode === "build" && !buildShopOpen && (
-          <button
-            className="panel shop-toggle"
-            type="button"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={() => setBuildShopOpen(true)}
-          >
-            Open Build Shop
-          </button>
+            {!buildShopOpen && (
+              <button
+                className="panel shop-toggle"
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => setBuildShopOpen(true)}
+              >
+                Open Build Shop
+              </button>
+            )}
+          </>
         )}
 
         {revenueLabels.length > 0 && (
