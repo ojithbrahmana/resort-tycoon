@@ -101,6 +101,7 @@ export function createEngine({ container }){
   let inputLocked = false
   let npcTime = 0
   let npcSpawnedInitial = false
+  let npcConflictCheckAt = 0
 
   function setHandlers({ onPlaceCb, onHoverCb, onInvalidCb }){
     onPlace = onPlaceCb
@@ -298,6 +299,7 @@ export function createEngine({ container }){
   const TOO_CLOSE = 1.2
   const NPC_DECISION_INTERVAL = 1.2
   const NPC_GROUND_OFFSET = 0.05
+  const NPC_CONFLICT_INTERVAL = 0.5
 
   function getRoadTilesArray() {
     return Array.from(roadSystem.roadsSet.values())
@@ -744,7 +746,10 @@ export function createEngine({ container }){
     for (const npc of state.npcs) {
       updateNpcMovement(npc, delta)
     }
-    resolveNearbyAnimationConflicts()
+    if (npcTime >= npcConflictCheckAt) {
+      resolveNearbyAnimationConflicts()
+      npcConflictCheckAt = npcTime + NPC_CONFLICT_INTERVAL
+    }
   }
 
   function tick(){
