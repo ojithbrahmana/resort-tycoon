@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import * as THREE from "three"
 import { createEngine } from "../engine/engine.js"
 import { gridToWorld, key } from "../engine/grid.js"
 import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutorial.js"
@@ -62,6 +63,8 @@ export default function App(){
   const [nextJiggle, setNextJiggle] = useState(false)
   const [progression, setProgression] = useState(createProgressionState())
   const [tutorialVisible, setTutorialVisible] = useState(true)
+  const [buildShopOpen, setBuildShopOpen] = useState(true)
+  const [revenueLabels, setRevenueLabels] = useState([])
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
@@ -338,12 +341,16 @@ export default function App(){
   function setModeSafe(next){
     setMode(next)
     engineRef.current?.setMode(next)
+    if (next !== "build") {
+      setBuildShopOpen(false)
+    }
   }
 
   function isCanvasEvent(event){
     if (!viewportRef.current) return false
     if (!event?.target) return false
     if (!viewportRef.current.contains(event.target)) return false
+    if (event.target.closest?.(".guide")) return true
     if (event.target.closest?.(".ui")) return false
     return true
   }
@@ -396,7 +403,15 @@ export default function App(){
     playSound("place")
 
     void engineRef.current?.addBuilding({ building: item, gx, gz, uid }).then(obj => {
-      setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj } : b))
+      let bboxTopY = null
+      let bboxHeight = null
+      if (obj) {
+        const bounds = new THREE.Box3().setFromObject(obj)
+        bboxTopY = bounds.max.y
+        bboxHeight = bounds.max.y - bounds.min.y
+        obj.userData = { ...obj.userData, bboxTopY, bboxHeight }
+      }
+      setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj, bboxTopY, bboxHeight } : b))
     })
 
     pop(`${item.name} placed.`)
@@ -468,6 +483,56 @@ export default function App(){
 
   const splashVisible = splashPhase !== "done"
 
+  useEffect(() => {
+    let raf
+    const tempVec = new THREE.Vector3()
+    const updateLabels = () => {
+      const eng = engineRef.current
+      if (!eng) {
+        raf = requestAnimationFrame(updateLabels)
+        return
+      }
+      const { camera, renderer } = eng
+      const width = renderer.domElement.clientWidth
+      const height = renderer.domElement.clientHeight
+      const statuses = economyRef.current.statuses.filter(status => status.incomePerSec > 0)
+      const labels = []
+      for (const status of statuses) {
+        const building = buildingsRef.current.find(b => b.uid === status.uid)
+        const obj = building?.object
+        if (!obj) continue
+        let topY = building?.bboxTopY
+        if (topY == null) {
+          const bounds = new THREE.Box3().setFromObject(obj)
+          topY = bounds.max.y
+          obj.userData.bboxTopY = topY
+        }
+        tempVec.set(obj.position.x, topY + 0.6, obj.position.z)
+        tempVec.project(camera)
+        if (
+          tempVec.z < -1 ||
+          tempVec.z > 1 ||
+          tempVec.x < -1 ||
+          tempVec.x > 1 ||
+          tempVec.y < -1 ||
+          tempVec.y > 1
+        ) {
+          continue
+        }
+        labels.push({
+          uid: status.uid,
+          text: `+$${status.incomePerSec}/s`,
+          x: (tempVec.x * 0.5 + 0.5) * width,
+          y: (-tempVec.y * 0.5 + 0.5) * height,
+        })
+      }
+      setRevenueLabels(labels)
+      raf = requestAnimationFrame(updateLabels)
+    }
+    updateLabels()
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   return (
     <>
       <div ref={viewportRef} style={{ position: "fixed", inset: 0 }} />
@@ -502,8 +567,34 @@ export default function App(){
             engineRef.current?.setTool(id)
           }}
           level={progression.level}
-          hidden={mode !== "build"}
+          hidden={mode !== "build" || !buildShopOpen}
+          onClose={() => setBuildShopOpen(false)}
         />
+
+        {mode === "build" && !buildShopOpen && (
+          <button
+            className="panel shop-toggle"
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => setBuildShopOpen(true)}
+          >
+            Open Build Shop
+          </button>
+        )}
+
+        {revenueLabels.length > 0 && (
+          <div className="revenue-labels">
+            {revenueLabels.map(label => (
+              <div
+                key={label.uid}
+                className="revenue-label"
+                style={{ left: label.x, top: label.y }}
+              >
+                {label.text}
+              </div>
+            ))}
+          </div>
+        )}
 
         {toast?.message && (
           <div

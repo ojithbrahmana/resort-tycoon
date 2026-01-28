@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 
-export default function BuildShop({ items, categories, selectedCategory, onSelectCategory, selectedTool, onSelectTool, level, hidden }){
+export default function BuildShop({ items, categories, selectedCategory, onSelectCategory, selectedTool, onSelectTool, level, hidden, onClose }){
   const visibleItems = items.filter(item => selectedCategory === "All" ? true : item.category === selectedCategory)
   const [jiggleId, setJiggleId] = useState(null)
 
@@ -10,6 +10,11 @@ export default function BuildShop({ items, categories, selectedCategory, onSelec
       onMouseDown={(event) => event.stopPropagation()}
     >
       <header>
+        {onClose && (
+          <button className="drawer-close" type="button" onClick={onClose} aria-label="Close build shop">
+            ✕
+          </button>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <div style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--font-display)" }}>Build Shop</div>
           <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.7 }}>Tap island to place</div>

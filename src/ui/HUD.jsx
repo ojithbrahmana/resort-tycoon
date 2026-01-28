@@ -15,7 +15,7 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
           </span>
         )}
       </div>
-      <div className="hud-pill">⭐ {level}</div>
+      <div className="hud-pill">LEVEL ⭐{level}</div>
       <div className="hud-pill hud-pill-muted">{xpPct}%</div>
       <button className="hud-pill hud-help" type="button" onClick={onReopenTutorial}>
         ❔ <span>Re-open tutorial</span>

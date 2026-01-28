@@ -1,17 +1,27 @@
-import React from "react"
+import React, { useEffect, useState } from "react"
 
 export default function LevelToast({ levelUp, onDismiss }){
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (!levelUp) {
+      setVisible(false)
+      return () => {}
+    }
+    setVisible(true)
+    const fadeTimer = window.setTimeout(() => setVisible(false), 2750)
+    const dismissTimer = window.setTimeout(() => onDismiss?.(), 3000)
+    return () => {
+      window.clearTimeout(fadeTimer)
+      window.clearTimeout(dismissTimer)
+    }
+  }, [levelUp, onDismiss])
+
   if (!levelUp) return null
+
   return (
-    <div className="panel level-toast" onMouseDown={(event) => event.stopPropagation()}>
-      <h3>🎉 Level Up! (Lv {levelUp.level})</h3>
-      <div style={{ fontWeight: 800 }}>New items unlocked:</div>
-      <div className="unlock-list">
-        {levelUp.unlocked.map(item => (
-          <div key={item.id} style={{ fontWeight: 700 }}>{item.name}</div>
-        ))}
-      </div>
-      <button className="btn" onClick={onDismiss}>Awesome!</button>
+    <div className={`panel level-toast ${visible ? "show" : ""}`} onMouseDown={(event) => event.stopPropagation()}>
+      <strong>Level Up! LEVEL ⭐{levelUp.level}</strong>
     </div>
   )
 }
