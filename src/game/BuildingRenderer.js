@@ -5,6 +5,7 @@ import { makeBillboardSprite } from "../engine/sprites.js"
 import { GRID_SIZE } from "./constants"
 
 const VILLA_MODEL_URL = new URL("../assets/models/villa.final.glb", import.meta.url).toString()
+const VILLA_PLUS_MODEL_URL = new URL("../assets/models/villa_plus.final.glb", import.meta.url).toString()
 const ICECREAM_MODEL_URL = new URL("../assets/models/icecream.final.glb", import.meta.url).toString()
 const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
 const SPA_MODEL_URL = new URL("../assets/models/spa.final.glb", import.meta.url).toString()
@@ -19,6 +20,9 @@ sharedGltfLoader.setDRACOLoader(sharedDracoLoader)
 let villaModel = null
 let villaModelPromise = null
 let villaScaleFactor = 1
+let villaPlusModel = null
+let villaPlusModelPromise = null
+let villaPlusScaleFactor = 1
 let iceCreamModel = null
 let iceCreamModelPromise = null
 let iceCreamScaleFactor = 1
@@ -97,9 +101,37 @@ function loadVillaModel() {
   return villaModelPromise
 }
 
+function loadVillaPlusModel() {
+  if (villaPlusModelPromise) return villaPlusModelPromise
+  villaPlusModelPromise = sharedGltfLoader.loadAsync(VILLA_PLUS_MODEL_URL).then((gltf) => {
+    villaPlusModel = gltf.scene
+    villaPlusModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+    applyModelBrightness(villaPlusModel)
+    villaPlusModel.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(villaPlusModel)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    const footprint = Math.max(size.x, size.z) || 1
+    const targetFootprint = GRID_SIZE * 3
+    villaPlusScaleFactor = targetFootprint / footprint
+    return villaPlusModel
+  }).catch((error) => {
+    console.error(`Failed to load Villa Plus model from ${VILLA_PLUS_MODEL_URL}.`, error)
+    return null
+  })
+
+  return villaPlusModelPromise
+}
+
 export function preloadBuildingModels() {
   return Promise.all([
     loadVillaModel(),
+    loadVillaPlusModel(),
     loadPalmModel(),
     loadIceCreamModel(),
     loadSpaModel(),
@@ -182,6 +214,24 @@ async function createVillaModel({ scaleMultiplier = 1 } = {}) {
     group.scale.setScalar(scaleMultiplier)
     group.updateMatrixWorld(true)
   }
+  return group
+}
+
+async function createVillaPlusModel() {
+  const model = await loadVillaPlusModel()
+  if (!model) {
+    return null
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(villaPlusScaleFactor)
+  clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset
+  const group = new THREE.Group()
+  group.add(createContactShadow(2.2))
+  group.add(clone)
   return group
 }
 
@@ -486,10 +536,17 @@ async function createBurgerShopModel() {
 }
 
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
-  if (building?.id === "villa" || building?.id === "villa_plus") {
-    const scaleMultiplier = building.id === "villa_plus" ? 1.5 : 1
-    const object = await createVillaModel({ scaleMultiplier })
+  if (building?.id === "villa") {
+    const object = await createVillaModel({ scaleMultiplier: 1 })
     return { object, isModel: true }
+  }
+  if (building?.id === "villa_plus") {
+    const object = await createVillaPlusModel()
+    if (object) {
+      return { object, isModel: true }
+    }
+    const fallback = await createVillaModel({ scaleMultiplier: 1.5 })
+    return { object: fallback, isModel: true }
   }
   if (building?.id === "icecream_parlour") {
     const object = await createIceCreamModel()

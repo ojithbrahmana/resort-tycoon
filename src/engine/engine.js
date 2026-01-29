@@ -806,6 +806,7 @@ export function createEngine({ container }){
     spawnGuest,
     shakeCamera,
     getGuestCount: () => npcs.length,
+    getZoomState: () => controls.getZoomState?.(),
     resetWorld,
     setPerfDebug,
     dispose: () => {

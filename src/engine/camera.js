@@ -18,8 +18,8 @@ export function attachCameraControls({ dom, camera }){
   let targetRadius = radius
   let theta = Math.PI/4
   let phi = 0.85
-  const minRadius = 60
-  const maxRadius = 480
+  const minRadius = 40
+  const maxRadius = 320
 
   function update(){
     radius += (targetRadius - radius) * 0.12
@@ -79,5 +79,9 @@ export function attachCameraControls({ dom, camera }){
     targetRadius = Math.max(minRadius, Math.min(maxRadius, targetRadius + e.deltaY * 0.25))
   }, { passive:false })
 
-  return { update, setEnabled }
+  function getZoomState() {
+    return { radius, targetRadius, minRadius, maxRadius }
+  }
+
+  return { update, setEnabled, getZoomState }
 }

@@ -67,6 +67,7 @@ export default function BuildShop({
       <div className="grid">
         {visibleItems.map(item => {
           const locked = level < item.unlockLevel
+          const isTerrain = item.category === "Terrain"
           return (
             <button
               key={item.id}
@@ -84,23 +85,32 @@ export default function BuildShop({
               <div className="thumb">
                 <img src={item.iconPath} alt="" className="thumb-image" />
               </div>
-              <button
-                type="button"
-                className="info-icon"
-                onMouseDown={stopUiEvent}
-                onClick={(event) => {
-                  stopUiEvent(event)
-                  setActiveInfoId(prev => (prev === item.id ? null : item.id))
-                }}
-                aria-label={`Info for ${item.name}`}
-              >
-                i
-              </button>
-              <div className={`info-tooltip ${activeInfoId === item.id ? "show" : ""}`}>
-                {formatIncome(item.incomePerSec)}
-              </div>
+              {!isTerrain && (
+                <>
+                  <button
+                    type="button"
+                    className="info-icon"
+                    onMouseDown={stopUiEvent}
+                    onClick={(event) => {
+                      stopUiEvent(event)
+                      setActiveInfoId(prev => (prev === item.id ? null : item.id))
+                    }}
+                    aria-label={`Info for ${item.name}`}
+                  >
+                    i
+                  </button>
+                  <div className={`info-tooltip ${activeInfoId === item.id ? "show" : ""}`}>
+                    {formatIncome(item.incomePerSec)}
+                  </div>
+                </>
+              )}
               <div style={{ fontWeight: 900 }}>{item.name}</div>
               <div style={{ fontWeight: 900, color: "#16a34a" }}>${item.cost}</div>
+              {isTerrain && (
+                <div className="terrain-detail">
+                  {item.description ?? "Terrain detail."}
+                </div>
+              )}
               {locked && (
                 <div className="lock-banner">
                   {`Unlocks at Level ${item.unlockLevel}`}
