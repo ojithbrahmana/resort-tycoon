@@ -5,8 +5,7 @@ const stopUiEvent = (event) => {
   event.stopPropagation()
 }
 
-function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan, perfEnabled, onTogglePerf }){
-  const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
+function HUD({ money, income, incomeTrend, level, onOpenLoan, perfEnabled, onTogglePerf }){
   const formattedMoney = `$${money.value.toLocaleString()}`
   const formattedIncome = `Income $${income.value.toLocaleString()}/s`
   return (
@@ -25,7 +24,6 @@ function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial
         )}
       </div>
       <div className="hud-pill">LEVEL ⭐{level}</div>
-      <div className="hud-pill hud-pill-muted">{xpPct}%</div>
       <button
         className="hud-pill hud-loan"
         type="button"
@@ -36,17 +34,6 @@ function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial
         }}
       >
         💰 <span>Loan</span>
-      </button>
-      <button
-        className="hud-pill hud-help"
-        type="button"
-        onMouseDown={stopUiEvent}
-        onClick={(event) => {
-          stopUiEvent(event)
-          onReopenTutorial?.()
-        }}
-      >
-        ❔ <span>Re-open tutorial</span>
       </button>
       <button
         className={`hud-pill ${perfEnabled ? "hud-pill-active" : "hud-pill-muted"}`}

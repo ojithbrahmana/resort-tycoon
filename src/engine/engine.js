@@ -5,7 +5,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
-import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF } from "../game/constants"
+import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
@@ -44,9 +44,9 @@ async function addPalmBorder({ scene }) {
   const baseScale = targetFootprint / footprint
 
   const placements = []
-  const baseRadius = ISLAND_RADIUS + 4
-  const minRadius = ISLAND_RADIUS - 1
-  const maxRadius = ISLAND_RADIUS + 10
+  const baseRadius = ISLAND_RADIUS - 4
+  const minRadius = SHORE_INNER_RADIUS + 1
+  const maxRadius = SHORE_OUTER_RADIUS
   let angle = Math.random() * Math.PI * 2
   const endAngle = angle + Math.PI * 2
   while (angle < endAngle) {
@@ -93,6 +93,7 @@ export function createEngine({ container }){
   renderer.setSize(width, height)
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.BasicShadowMap
   renderer.outputColorSpace = THREE.SRGBColorSpace
   container.appendChild(renderer.domElement)
 
@@ -197,9 +198,20 @@ export function createEngine({ container }){
   }
   function setTool(t){ selectedTool = t; removeGhost() }
 
+  function cloneMaterialsForInstance(object) {
+    object.traverse((child) => {
+      if (!child.isMesh || !child.material) return
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      const cloned = materials.map(material => material.clone())
+      child.material = Array.isArray(child.material) ? cloned : cloned[0]
+      child.userData.disposeMaterial = true
+    })
+  }
+
   function removeGhost(){
     if(ghost){
       buildGroup.remove(ghost)
+      disposeObject(ghost)
       ghost = null
     }
   }
@@ -207,12 +219,14 @@ export function createEngine({ container }){
   function clearSelectionOutline(){
     if (selectionOutline) {
       buildGroup.remove(selectionOutline)
+      disposeObject(selectionOutline)
       selectionOutline = null
     }
   }
 
-  function withinIsland(x,z){
-    return Math.sqrt(x*x + z*z) <= (ISLAND_RADIUS - 3)
+  function isBuildableSurface(x,z){
+    const radius = Math.hypot(x, z)
+    return radius <= GRASS_RADIUS || (radius >= SHORE_INNER_RADIUS && radius <= SHORE_OUTER_RADIUS)
   }
 
   function isWithinGrid(gx,gz){
@@ -239,6 +253,8 @@ export function createEngine({ container }){
     outline.rotation.x = -Math.PI / 2
     outline.position.y = groundY + 0.12
     outline.userData.footprint = { w, h }
+    outline.userData.disposeGeometry = true
+    outline.userData.disposeMaterial = true
     return outline
   }
 
@@ -291,7 +307,7 @@ export function createEngine({ container }){
     const cells = getFootprintCells(gx, gz, footprint)
     const ok = cells.every(cell => {
       const { x, z } = gridToWorld(cell.gx, cell.gz)
-      return withinIsland(x, z)
+      return isBuildableSurface(x, z)
         && isWithinGrid(cell.gx, cell.gz)
         && !occupiedKeys.has(key(cell.gx, cell.gz))
     })
@@ -328,6 +344,8 @@ export function createEngine({ container }){
     const shadow = new THREE.Mesh(geo, mat)
     shadow.rotation.x = -Math.PI / 2
     shadow.position.y = groundY + 0.03
+    shadow.userData.disposeGeometry = true
+    shadow.userData.disposeMaterial = true
     return shadow
   }
 
@@ -351,6 +369,7 @@ export function createEngine({ container }){
     const placeholder = makeBillboardSprite(building.spritePath, size)
     placeholder.position.set(x, groundY + size / 2, z)
     placeholder.userData = { gx, gz, uid }
+    placeholder.userData.disposeMaterial = true
     buildGroup.add(placeholder)
 
     if (building.modelPath) {
@@ -361,6 +380,7 @@ export function createEngine({ container }){
       })
       if (isModel) {
         buildGroup.remove(placeholder)
+        disposeObject(placeholder)
         object.position.set(x, groundY, z)
         object.userData = { gx, gz, uid }
         animatePlacement(object)
@@ -385,8 +405,10 @@ export function createEngine({ container }){
     }
     if (obj.userData?.shadow) {
       buildGroup.remove(obj.userData.shadow)
+      disposeObject(obj.userData.shadow)
     }
     buildGroup.remove(obj)
+    disposeObject(obj)
   }
 
   function updateVillaStatus({ uid, gx, gz, roadOk, powerOk, active, footprint }){
@@ -398,6 +420,9 @@ export function createEngine({ container }){
         coin: makeIconSprite({ emoji: "🪙", background: "#22c55e" }),
         pulse: 0,
       }
+      status.road.userData.disposeMaterial = true
+      status.power.userData.disposeMaterial = true
+      status.coin.userData.disposeMaterial = true
       status.road.position.set(0, 9, 0)
       status.power.position.set(0, 9, 0)
       status.coin.position.set(0, 9, 0)
@@ -423,6 +448,7 @@ export function createEngine({ container }){
     const { x, z } = gridToWorld(gx, gz)
     const spr = makeTextSprite({ text, background: color })
     spr.position.set(x, 10, z)
+    spr.userData.disposeMaterial = true
     buildGroup.add(spr)
     popups.push({ sprite: spr, ttl: 1.2, velocity: 1.4 })
   }
@@ -436,6 +462,8 @@ export function createEngine({ container }){
       emissiveIntensity: 0.6,
     })
     const sparkle = new THREE.Mesh(geo, mat)
+    sparkle.userData.disposeGeometry = true
+    sparkle.userData.disposeMaterial = true
     sparkle.position.set(x + (Math.random() - 0.5) * 0.6, 7.5, z + (Math.random() - 0.5) * 0.6)
     sparkle.castShadow = false
     buildGroup.add(sparkle)
@@ -543,6 +571,7 @@ export function createEngine({ container }){
   function buildNpcInstance() {
     if (!npcState.templateScene) return null
     const npcRoot = npcClone(npcState.templateScene)
+    cloneMaterialsForInstance(npcRoot)
     npcRoot.scale.setScalar(npcState.scale)
     npcRoot.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(npcRoot)
@@ -657,6 +686,7 @@ export function createEngine({ container }){
       p.sprite.material.opacity = Math.max(0, p.ttl / 1.2)
       if (p.ttl <= 0) {
         buildGroup.remove(p.sprite)
+        disposeObject(p.sprite)
         popups.splice(i, 1)
       }
     }
@@ -669,6 +699,7 @@ export function createEngine({ container }){
       s.mesh.material.transparent = true
       if (s.ttl <= 0) {
         buildGroup.remove(s.mesh)
+        disposeObject(s.mesh)
         sparkles.splice(i, 1)
       }
     }
@@ -769,6 +800,7 @@ export function createEngine({ container }){
     }
   }
 
+  let animationFrameId = null
   function tick(){
     const now = performance.now()
     const delta = Math.min(0.05, (now - lastTime) / 1000)
@@ -795,7 +827,7 @@ export function createEngine({ container }){
     }
     update(delta)
     render()
-    requestAnimationFrame(tick)
+    animationFrameId = requestAnimationFrame(tick)
   }
   tick()
 
@@ -804,6 +836,7 @@ export function createEngine({ container }){
     clearSelectionOutline()
     for (const child of [...buildGroup.children]) {
       buildGroup.remove(child)
+      disposeObject(child)
     }
     popups.length = 0
     sparkles.length = 0
@@ -840,5 +873,34 @@ export function createEngine({ container }){
     getGuestCount: () => npcs.length,
     resetWorld,
     setPerfDebug,
+    dispose: () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+      window.removeEventListener("resize", resize)
+      resetWorld()
+      roadSystem.dispose?.()
+      renderer.dispose()
+      if (renderer.domElement?.parentElement) {
+        renderer.domElement.parentElement.removeChild(renderer.domElement)
+      }
+      if (perfState.element?.parentElement) {
+        perfState.element.parentElement.removeChild(perfState.element)
+      }
+    },
   }
+}
+
+function disposeObject(object) {
+  if (!object) return
+  object.traverse((child) => {
+    if (child.geometry && child.userData?.disposeGeometry) {
+      child.geometry.dispose()
+    }
+    if (child.material && child.userData?.disposeMaterial) {
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      materials.forEach((material) => material.dispose())
+    }
+  })
 }

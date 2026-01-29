@@ -57,6 +57,22 @@ function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
   })
 }
 
+function cloneMaterialsForInstance(object) {
+  object.traverse((child) => {
+    if (!child.isMesh || !child.material) return
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    const cloned = materials.map((material) => material.clone())
+    child.material = Array.isArray(child.material) ? cloned : cloned[0]
+    child.userData.disposeMaterial = true
+  })
+}
+
+function markDisposable(mesh, { geometry = false, material = false } = {}) {
+  if (!mesh) return
+  if (geometry) mesh.userData.disposeGeometry = true
+  if (material) mesh.userData.disposeMaterial = true
+}
+
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
   villaModelPromise = sharedGltfLoader.loadAsync(VILLA_MODEL_URL).then((gltf) => {
@@ -104,6 +120,7 @@ function createContactShadow(radius) {
   const shadow = new THREE.Mesh(geo, mat)
   shadow.rotation.x = -Math.PI / 2
   shadow.position.y = 0.05
+  markDisposable(shadow, { geometry: true, material: true })
   return shadow
 }
 
@@ -126,16 +143,19 @@ function createVillaMesh({ upgraded = false }) {
   base.position.y = 0.8
   base.castShadow = true
   base.receiveShadow = true
+  markDisposable(base, { geometry: true, material: true })
 
   const roof = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.2, 4), roofMat)
   roof.rotation.y = Math.PI / 4
   roof.position.y = 2.1
   roof.castShadow = true
   roof.receiveShadow = true
+  markDisposable(roof, { geometry: true, material: true })
 
   const trim = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.2, 2.5), trimMat)
   trim.position.y = 1.65
   trim.castShadow = true
+  markDisposable(trim, { geometry: true, material: true })
 
   group.add(createContactShadow(1.6))
   group.add(base, trim, roof)
@@ -151,6 +171,7 @@ async function createVillaModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(villaScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
@@ -192,6 +213,7 @@ async function createIceCreamModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(iceCreamScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
@@ -222,13 +244,16 @@ function createGeneratorMesh() {
   body.position.y = 0.6
   body.castShadow = true
   body.receiveShadow = true
+  markDisposable(body, { geometry: true, material: true })
 
   const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.4, 8), metalMat)
   chimney.position.set(0.7, 1.5, -0.5)
   chimney.castShadow = true
+  markDisposable(chimney, { geometry: true, material: true })
 
   const light = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), emissiveMat)
   light.position.set(-0.6, 1.05, 0.6)
+  markDisposable(light, { geometry: true, material: true })
 
   group.add(createContactShadow(1.3))
   group.add(body, chimney, light)
@@ -268,6 +293,7 @@ async function createPalmModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(palmScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
@@ -309,6 +335,7 @@ async function createSpaModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(spaScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
@@ -350,6 +377,7 @@ async function createPoolModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(poolScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset + 0.05
@@ -396,6 +424,7 @@ async function createBeachDjModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(beachDjScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset + 0.05
@@ -442,6 +471,7 @@ async function createBurgerShopModel() {
   const clone = model.clone(true)
   clone.scale.setScalar(burgerShopScaleFactor)
   clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset + 0.05

@@ -266,4 +266,16 @@ export class RoadSystem {
       mesh.instanceMatrix.needsUpdate = true
     }
   }
+
+  dispose() {
+    if (this.group?.parent) {
+      this.group.parent.remove(this.group)
+    }
+    const meshes = [...Object.values(this.meshes), ...Object.values(this.outlines)]
+    meshes.forEach((mesh) => {
+      mesh.geometry.dispose()
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      materials.forEach((material) => material.dispose())
+    })
+  }
 }
