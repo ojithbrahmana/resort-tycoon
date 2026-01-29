@@ -9,17 +9,27 @@ export function createCamera(width,height){
 
 export function attachCameraControls({ dom, camera }){
   // lightweight orbit + pan + zoom
+  const MIN_ZOOM_PERCENT = 60
+  const MAX_ZOOM_PERCENT = 150
+  const DEFAULT_ZOOM_PERCENT = 70
+  const MIN_RADIUS = 55
+  const MAX_RADIUS = 165
   let isRot=false, isPan=false
   let pointerDown=false
   let enabled=true
   let lastX=0,lastY=0
   const target = new THREE.Vector3(0,0,0)
-  let radius = 145
+  const percentToRadius = (percent) => {
+    const clamped = Math.max(MIN_ZOOM_PERCENT, Math.min(MAX_ZOOM_PERCENT, percent))
+    const ratio = (clamped - MIN_ZOOM_PERCENT) / (MAX_ZOOM_PERCENT - MIN_ZOOM_PERCENT)
+    return MAX_RADIUS - ratio * (MAX_RADIUS - MIN_RADIUS)
+  }
+  let radius = percentToRadius(DEFAULT_ZOOM_PERCENT)
   let targetRadius = radius
   let theta = Math.PI/4
   let phi = 0.85
-  const minRadius = 40
-  const maxRadius = 320
+  const minRadius = MIN_RADIUS
+  const maxRadius = MAX_RADIUS
 
   function update(){
     radius += (targetRadius - radius) * 0.12

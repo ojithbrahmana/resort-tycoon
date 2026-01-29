@@ -87,8 +87,9 @@ button {
 
 .hud-logo {
   position: fixed;
-  top: -25px;
-  left: -35px;
+  top: 0;
+  left: 0;
+  margin-top: -5px;
   pointer-events: none;
   z-index: 40;
 }
@@ -117,6 +118,31 @@ button {
 .hud-pill-primary {
   background: #86f31d;
   color: #1f3b05;
+}
+
+.hud-pill-expense {
+  background: #fee2e2;
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #b91c1c;
+}
+
+.hud-happiness-bar {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.hud-happiness-block {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(226, 232, 240, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.6);
+}
+
+.hud-happiness-block.filled {
+  background: #FFD447;
+  border-color: rgba(202, 138, 4, 0.6);
 }
 
 .hud-pill-stack {

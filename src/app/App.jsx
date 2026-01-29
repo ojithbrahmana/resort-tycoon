@@ -3,7 +3,7 @@ import * as THREE from "three"
 import { createEngine } from "../engine/engine.js"
 import { gridToWorld, key, worldToGrid } from "../engine/grid.js"
 import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutorial.js"
-import { computeEconomy } from "../game/economy"
+import { computeEconomy, computeGuestCount, computeHappiness } from "../game/economy"
 import { createProgressionState, applyXp, XP_REWARDS } from "../game/progression"
 import { CATALOG, CATEGORIES } from "../assets/catalog"
 import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
@@ -72,15 +72,13 @@ export default function App(){
   const occupiedRef = useRef(new Set())
   const buildingsRef = useRef([])
   const buildingsByUidRef = useRef(new Map())
-  const economyRef = useRef({ total: 0, statuses: [] })
+  const economyRef = useRef({ total: 0, income: 0, expenses: 0, statuses: [] })
   const moneyRef = useRef(1000)
   const levelRef = useRef(1)
   const hoverRef = useRef(null)
   const dragRef = useRef({ active: false, start: null, axis: null, placed: new Set() })
   const moveSelectionRef = useRef(null)
   const activeLoanRef = useRef(null)
-  const negativeTimerRef = useRef(0)
-  const debtTimerRef = useRef(0)
   const builtInSeedRef = useRef(false)
 
   const [mode, setMode] = useState("build")
@@ -145,8 +143,21 @@ export default function App(){
     }
   }, [])
 
-  const economy = useMemo(()=> computeEconomy({ buildings, catalogById }), [buildings])
+  const guestCount = useMemo(() => computeGuestCount({ buildings }), [buildings])
+  const economy = useMemo(
+    () => computeEconomy({ buildings, catalogById, guests: guestCount, level: progression.level }),
+    [buildings, catalogById, guestCount, progression.level]
+  )
   economyRef.current = economy
+  const happiness = useMemo(
+    () => computeHappiness({
+      buildings,
+      catalogById,
+      money,
+      hasLoan: Boolean(activeLoan),
+    }),
+    [buildings, catalogById, money, activeLoan]
+  )
 
   const tutorialProgress = useMemo(() => computeTutorialProgress({ buildings }), [buildings])
   const tutorial = useMemo(() => ({
@@ -368,7 +379,7 @@ export default function App(){
       const eng = engineRef.current
       if (!eng) return
       const current = economyRef.current
-      if (current.total <= 0) return
+      if (current.income <= 0) return
       if (eng.getGuestCount() > 12) return
 
       const roadsSet = new Set(buildingsRef.current.filter(b => b.id === "road").map(b => key(b.gx, b.gz)))
@@ -445,19 +456,7 @@ export default function App(){
   useEffect(() => {
     const timer = setInterval(() => {
       if (bankrupt) return
-      const income = economyRef.current.total
-      const payment = activeLoanRef.current?.paymentPerSecond ?? 0
-      if (moneyRef.current < 0) {
-        negativeTimerRef.current += 0.25
-      } else {
-        negativeTimerRef.current = 0
-      }
-      if (payment > income * 0.75 && payment > 0) {
-        debtTimerRef.current += 0.25
-      } else {
-        debtTimerRef.current = 0
-      }
-      if (negativeTimerRef.current >= 3 || debtTimerRef.current >= 5) {
+      if (moneyRef.current <= -1000) {
         setBankrupt(true)
         setBuildShopOpen(false)
         setLoanPanelOpen(false)
@@ -577,8 +576,6 @@ export default function App(){
     setHasBuiltGenerator(false)
     setActiveLoan(null)
     activeLoanRef.current = null
-    negativeTimerRef.current = 0
-    debtTimerRef.current = 0
     setTutorialDismissed(false)
     setTutorialVisible(true)
     setModeSafe("build")
@@ -622,6 +619,12 @@ export default function App(){
     return radius <= GRASS_RADIUS || (radius >= SHORE_INNER_RADIUS && radius <= SHORE_OUTER_RADIUS)
   }
 
+  function isShorelineCell(gx, gz){
+    const { x, z } = gridToWorld(gx, gz)
+    const radius = Math.hypot(x, z)
+    return radius >= SHORE_INNER_RADIUS && radius <= SHORE_OUTER_RADIUS
+  }
+
   function isWithinGrid(gx, gz){
     return Math.abs(gx) <= GRID_HALF && Math.abs(gz) <= GRID_HALF
   }
@@ -631,6 +634,9 @@ export default function App(){
     for (const cell of cells) {
       if (!isWithinGrid(cell.gx, cell.gz) || !isBuildableSurface(cell.gx, cell.gz)) {
         return "Can't build there."
+      }
+      if (item?.id === "dock" && !isShorelineCell(cell.gx, cell.gz)) {
+        return "Dock must be placed on the shoreline."
       }
       if (occupiedRef.current.has(key(cell.gx, cell.gz))) {
         return "Tile already occupied."
@@ -682,7 +688,6 @@ export default function App(){
       setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
     })
 
-    pop(`${item.name} placed.`)
     return { placed: true, reason: null }
   }
 
@@ -845,9 +850,10 @@ export default function App(){
     bump: moneyBump,
   }), [moneyDisplay, moneyBump])
   const incomeDisplayState = useMemo(() => ({
-    value: economy.total,
+    value: economy.income,
     deltaText: incomeDeltaText,
-  }), [economy.total, incomeDeltaText])
+  }), [economy.income, incomeDeltaText])
+  const expenseDisplayState = useMemo(() => economy.expenses, [economy.expenses])
 
   const handleOpenLoan = useCallback(() => {
     if (!bankrupt) setLoanPanelOpen(true)
@@ -968,7 +974,7 @@ export default function App(){
   }, [])
 
   const zoomPercent = zoomState
-    ? Math.round(((zoomState.maxRadius - zoomState.radius) / (zoomState.maxRadius - zoomState.minRadius)) * 100)
+    ? Math.round(60 + ((zoomState.maxRadius - zoomState.radius) / (zoomState.maxRadius - zoomState.minRadius)) * 90)
     : null
 
   return (
@@ -996,6 +1002,9 @@ export default function App(){
           money={moneyDisplayState}
           income={incomeDisplayState}
           incomeTrend={incomeTrend}
+          expenses={expenseDisplayState}
+          guests={guestCount}
+          happiness={happiness}
           level={progression.level}
           onOpenLoan={handleOpenLoan}
         />

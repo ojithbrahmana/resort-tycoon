@@ -106,11 +106,6 @@ export default function BuildShop({
               )}
               <div style={{ fontWeight: 900 }}>{item.name}</div>
               <div style={{ fontWeight: 900, color: "#16a34a" }}>${item.cost}</div>
-              {isTerrain && (
-                <div className="terrain-detail">
-                  {item.description ?? "Terrain detail."}
-                </div>
-              )}
               {locked && (
                 <div className="lock-banner">
                   {`Unlocks at Level ${item.unlockLevel}`}
