@@ -5,7 +5,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
-import { GRID_SIZE, ISLAND_RADIUS, GRID_HALF, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
+import { GRID_SIZE, GRID_HALF, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
 import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
@@ -14,75 +14,11 @@ import { findPath } from "../game/guests"
 
 const skeletonClone = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone
 const npcClone = skeletonClone || ((source) => source.clone(true))
-const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 const sharedDracoLoader = new DRACOLoader()
 sharedDracoLoader.setDecoderPath(DRACO_DECODER_URL)
 const sharedGltfLoader = new GLTFLoader()
 sharedGltfLoader.setDRACOLoader(sharedDracoLoader)
-
-async function addPalmBorder({ scene }) {
-  const gltf = await sharedGltfLoader.loadAsync(PALM_MODEL_URL).catch((error) => {
-    console.error(`Failed to load palm model for border palms from ${PALM_MODEL_URL}.`, error)
-    return null
-  })
-  if (!gltf?.scene) return
-
-  const meshes = []
-  gltf.scene.traverse((child) => {
-    if (child.isMesh) {
-      meshes.push(child)
-    }
-  })
-  if (!meshes.length) return
-
-  const bounds = new THREE.Box3().setFromObject(gltf.scene)
-  const size = new THREE.Vector3()
-  bounds.getSize(size)
-  const footprint = Math.max(size.x, size.z) || 1
-  const targetFootprint = GRID_SIZE * 2
-  const baseScale = targetFootprint / footprint
-
-  const placements = []
-  const baseRadius = ISLAND_RADIUS - 4
-  const minRadius = SHORE_INNER_RADIUS + 1
-  const maxRadius = SHORE_OUTER_RADIUS
-  let angle = Math.random() * Math.PI * 2
-  const endAngle = angle + Math.PI * 2
-  while (angle < endAngle) {
-    const radiusJitter = (Math.random() - 0.5) * 6
-    const radius = Math.min(maxRadius, Math.max(minRadius, baseRadius + radiusJitter))
-    const x = Math.cos(angle) * radius
-    const z = Math.sin(angle) * radius
-    placements.push({
-      x,
-      z,
-      rotation: Math.random() * Math.PI * 2,
-      scale: baseScale * (0.85 + Math.random() * 0.3),
-    })
-    const spacing = 5 + Math.random() * 4
-    angle += spacing / radius
-  }
-
-  const group = new THREE.Group()
-  group.name = "palm-border"
-  meshes.forEach((mesh) => {
-    const instanced = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length)
-    instanced.castShadow = false
-    instanced.receiveShadow = false
-    const matrix = new THREE.Matrix4()
-    placements.forEach((placement, index) => {
-      matrix.compose(
-        new THREE.Vector3(placement.x, 3.05, placement.z),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, placement.rotation, 0)),
-        new THREE.Vector3(placement.scale, placement.scale, placement.scale)
-      )
-      instanced.setMatrixAt(index, matrix)
-    })
-    group.add(instanced)
-  })
-  scene.add(group)
-}
 
 export function createEngine({ container }){
   preloadBuildingModels()
@@ -98,7 +34,6 @@ export function createEngine({ container }){
   container.appendChild(renderer.domElement)
 
   const { scene, island } = createScene()
-  void addPalmBorder({ scene })
   const camera = createCamera(width,height)
   const controls = attachCameraControls({ dom: renderer.domElement, camera })
   controls.setEnabled?.(false)
@@ -150,21 +85,23 @@ export function createEngine({ container }){
     ready: false,
     pending: [],
   }
-  const npcTargetCount = 8
+  const npcTargetCount = 0
   const npcMinDistance = GRID_SIZE * 1.6
   const npcNeighborRadius = GRID_SIZE * 2.2
 
-  loadNpcModel().then(({ scene: npcTemplateScene, clips: npcClips, scale }) => {
-    npcState.templateScene = npcTemplateScene
-    npcState.clips = npcClips
-    npcState.scale = scale
-    npcState.ready = true
-    if (npcState.pending.length) {
-      const pending = [...npcState.pending]
-      npcState.pending = []
-      pending.forEach(request => spawnGuest(request))
-    }
-  })
+  if (npcTargetCount > 0) {
+    loadNpcModel().then(({ scene: npcTemplateScene, clips: npcClips, scale }) => {
+      npcState.templateScene = npcTemplateScene
+      npcState.clips = npcClips
+      npcState.scale = scale
+      npcState.ready = true
+      if (npcState.pending.length) {
+        const pending = [...npcState.pending]
+        npcState.pending = []
+        pending.forEach(request => spawnGuest(request))
+      }
+    })
+  }
 
   let ghost = null
   let selectionOutline = null
@@ -603,6 +540,7 @@ export function createEngine({ container }){
   }
 
   function spawnGuest({ path } = {}){
+    if (npcTargetCount <= 0) return
     if (!npcState.ready) {
       npcState.pending.push({ path })
       return
@@ -671,11 +609,13 @@ export function createEngine({ container }){
   function update(delta){
     roadSystem.update(delta)
 
-    npcSpawnTimer -= delta
-    if (npcSpawnTimer <= 0 && npcState.ready && npcs.length < npcTargetCount) {
-      if (roadSystem.getRoadCells().length > 0) {
-        spawnGuest()
-        npcSpawnTimer = 0.6
+    if (npcTargetCount > 0) {
+      npcSpawnTimer -= delta
+      if (npcSpawnTimer <= 0 && npcState.ready && npcs.length < npcTargetCount) {
+        if (roadSystem.getRoadCells().length > 0) {
+          spawnGuest()
+          npcSpawnTimer = 0.6
+        }
       }
     }
 
@@ -729,73 +669,75 @@ export function createEngine({ container }){
       }
     }
 
-    for (let i = npcs.length - 1; i >= 0; i -= 1) {
-      const npc = npcs[i]
-      npc.mixer.update(delta)
+    if (npcTargetCount > 0) {
+      for (let i = npcs.length - 1; i >= 0; i -= 1) {
+        const npc = npcs[i]
+        npc.mixer.update(delta)
 
-      let minNeighborDist = Infinity
-      for (const other of npcs) {
-        if (other === npc) continue
-        const dx = other.object.position.x - npc.object.position.x
-        const dz = other.object.position.z - npc.object.position.z
+        let minNeighborDist = Infinity
+        for (const other of npcs) {
+          if (other === npc) continue
+          const dx = other.object.position.x - npc.object.position.x
+          const dz = other.object.position.z - npc.object.position.z
+          const dist = Math.hypot(dx, dz)
+          if (dist < minNeighborDist) minNeighborDist = dist
+        }
+        const separationScale = minNeighborDist < npcMinDistance ? 0.2 : 1
+
+        if (!npc.targetCell) {
+          npc.idleTimer -= delta
+          if (npc.idleTimer <= 0) {
+            npc.path = findNpcPath(npc)
+            if (npc.path) {
+              npc.pathIndex = 1
+              npc.targetCell = npc.path[npc.pathIndex] || null
+              const moveClip = pickNpcClip({
+                position: npc.object.position,
+                tags: ["walk", "run", "stylish", "confident"],
+                ignoreNpc: npc,
+              })
+              if (moveClip) npc.moveClip = moveClip
+              if (npc.moveClip && npc.currentClipName !== npc.moveClip.name) {
+                applyNpcClip(npc, npc.moveClip)
+              }
+            } else {
+              npc.idleTimer = 0.8 + Math.random() * 0.8
+            }
+          }
+          ensureNpcClipVariety(npc, ["idle", "stand"])
+          continue
+        }
+
+        ensureNpcClipVariety(npc, ["walk", "run", "stylish", "confident"])
+        const target = gridToWorld(npc.targetCell.gx, npc.targetCell.gz)
+        const dx = target.x - npc.object.position.x
+        const dz = target.z - npc.object.position.z
         const dist = Math.hypot(dx, dz)
-        if (dist < minNeighborDist) minNeighborDist = dist
-      }
-      const separationScale = minNeighborDist < npcMinDistance ? 0.2 : 1
-
-      if (!npc.targetCell) {
-        npc.idleTimer -= delta
-        if (npc.idleTimer <= 0) {
-          npc.path = findNpcPath(npc)
-          if (npc.path) {
-            npc.pathIndex = 1
-            npc.targetCell = npc.path[npc.pathIndex] || null
-            const moveClip = pickNpcClip({
-              position: npc.object.position,
-              tags: ["walk", "run", "stylish", "confident"],
-              ignoreNpc: npc,
-            })
-            if (moveClip) npc.moveClip = moveClip
-            if (npc.moveClip && npc.currentClipName !== npc.moveClip.name) {
-              applyNpcClip(npc, npc.moveClip)
+        if (dist < 0.15) {
+          npc.lastCell = npc.currentCell
+          npc.currentCell = npc.targetCell
+          npc.pathIndex += 1
+          if (!npc.path || npc.pathIndex >= npc.path.length) {
+            npc.targetCell = null
+            npc.path = null
+            npc.idleTimer = 0.8 + Math.random() * 0.8
+            if (npc.idleClip) {
+              const idleClip = pickNpcClip({
+                position: npc.object.position,
+                tags: ["idle", "stand"],
+                ignoreNpc: npc,
+              })
+              npc.idleClip = idleClip || npc.idleClip
+              applyNpcClip(npc, npc.idleClip)
             }
           } else {
-            npc.idleTimer = 0.8 + Math.random() * 0.8
-          }
-        }
-        ensureNpcClipVariety(npc, ["idle", "stand"])
-        continue
-      }
-
-      ensureNpcClipVariety(npc, ["walk", "run", "stylish", "confident"])
-      const target = gridToWorld(npc.targetCell.gx, npc.targetCell.gz)
-      const dx = target.x - npc.object.position.x
-      const dz = target.z - npc.object.position.z
-      const dist = Math.hypot(dx, dz)
-      if (dist < 0.15) {
-        npc.lastCell = npc.currentCell
-        npc.currentCell = npc.targetCell
-        npc.pathIndex += 1
-        if (!npc.path || npc.pathIndex >= npc.path.length) {
-          npc.targetCell = null
-          npc.path = null
-          npc.idleTimer = 0.8 + Math.random() * 0.8
-          if (npc.idleClip) {
-            const idleClip = pickNpcClip({
-              position: npc.object.position,
-              tags: ["idle", "stand"],
-              ignoreNpc: npc,
-            })
-            npc.idleClip = idleClip || npc.idleClip
-            applyNpcClip(npc, npc.idleClip)
+            npc.targetCell = npc.path[npc.pathIndex]
           }
         } else {
-          npc.targetCell = npc.path[npc.pathIndex]
+          npc.object.rotation.y = Math.atan2(dx, dz)
+          npc.object.position.x += (dx / dist) * npc.speed * separationScale * delta
+          npc.object.position.z += (dz / dist) * npc.speed * separationScale * delta
         }
-      } else {
-        npc.object.rotation.y = Math.atan2(dx, dz)
-        npc.object.position.x += (dx / dist) * npc.speed * separationScale * delta
-        npc.object.position.z += (dz / dist) * npc.speed * separationScale * delta
       }
     }
   }
