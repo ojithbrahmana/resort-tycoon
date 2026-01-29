@@ -6,16 +6,23 @@ export function createScene(){
   scene.background = new THREE.Color(0x8ae3ff)
   scene.fog = new THREE.Fog(0x8ae3ff, 140, 520)
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75)
+  const ambient = new THREE.AmbientLight(0xffffff, 0.9)
   scene.add(ambient)
 
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9)
+  const hemisphere = new THREE.HemisphereLight(0xdceeff, 0xf3e7c5, 0.45)
+  scene.add(hemisphere)
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.05)
   sun.position.set(90, 140, 70)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048,2048)
   sun.shadow.camera.near = 10
   sun.shadow.camera.far = 400
   scene.add(sun)
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.35)
+  fillLight.position.set(-120, 80, -60)
+  scene.add(fillLight)
 
   // ocean
   const ocean = new THREE.Mesh(

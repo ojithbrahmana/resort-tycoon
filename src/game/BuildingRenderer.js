@@ -43,6 +43,17 @@ function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
       if (next.emissive) {
         next.emissive.multiplyScalar(factor)
       }
+      if (next.map) {
+        next.map.colorSpace = THREE.SRGBColorSpace
+        next.map.needsUpdate = true
+      }
+      if (typeof next.envMapIntensity === "number") {
+        next.envMapIntensity = 1.2
+      }
+      if (typeof next.roughness === "number") {
+        next.roughness = Math.min(next.roughness, 0.95)
+      }
+      next.needsUpdate = true
       return next
     })
     child.material = Array.isArray(child.material) ? brightened : brightened[0]

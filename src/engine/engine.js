@@ -23,6 +23,8 @@ export function createEngine({ container }){
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   renderer.shadowMap.enabled = true
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.2
   container.appendChild(renderer.domElement)
 
   const { scene, island } = createScene()
