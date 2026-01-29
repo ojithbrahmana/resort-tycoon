@@ -2,7 +2,7 @@ import * as THREE from "three"
 
 export function createCamera(width,height){
   const camera = new THREE.PerspectiveCamera(45, width/height, 0.1, 2000)
-  camera.position.set(150, 110, 150)
+  camera.position.set(100, 75, 100)
   camera.lookAt(0,0,0)
   return camera
 }
@@ -14,11 +14,11 @@ export function attachCameraControls({ dom, camera }){
   let enabled=true
   let lastX=0,lastY=0
   const target = new THREE.Vector3(0,0,0)
-  let radius = 220
+  let radius = 145
   let targetRadius = radius
   let theta = Math.PI/4
   let phi = 0.85
-  const minRadius = 90
+  const minRadius = 60
   const maxRadius = 480
 
   function update(){

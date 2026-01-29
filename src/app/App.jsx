@@ -104,7 +104,6 @@ export default function App(){
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
-  const [perfDebugEnabled, setPerfDebugEnabled] = useState(Boolean(import.meta.env?.DEV))
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
@@ -200,8 +199,6 @@ export default function App(){
     if (!viewportRef.current) return
     const eng = createEngine({ container: viewportRef.current })
     engineRef.current = eng
-    eng.setPerfDebug(perfDebugEnabled)
-
     eng.setHandlers({
       onPlaceCb: ({ gx, gz }) => {
         const item = catalogById[toolRef.current]
@@ -312,10 +309,6 @@ export default function App(){
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportRef])
-
-  useEffect(() => {
-    engineRef.current?.setPerfDebug(perfDebugEnabled)
-  }, [perfDebugEnabled])
 
   useEffect(() => {
     if (!levelUp) return () => {}
@@ -685,6 +678,10 @@ export default function App(){
       let bboxHeight = null
       let bboxBottomY = null
       if (obj) {
+        if (obj.type === "road") {
+          setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj } : b))
+          return
+        }
         const bounds = new THREE.Box3().setFromObject(obj)
         bboxTopY = bounds.max.y
         bboxHeight = bounds.max.y - bounds.min.y
@@ -865,10 +862,6 @@ export default function App(){
     if (!bankrupt) setLoanPanelOpen(true)
   }, [bankrupt])
 
-  const handleTogglePerf = useCallback(() => {
-    setPerfDebugEnabled(prev => !prev)
-  }, [])
-
   const splashVisible = splashPhase !== "done"
   const showLogo = tutorialDismissed || !tutorialVisible
 
@@ -982,8 +975,6 @@ export default function App(){
           incomeTrend={incomeTrend}
           level={progression.level}
           onOpenLoan={handleOpenLoan}
-          perfEnabled={perfDebugEnabled}
-          onTogglePerf={handleTogglePerf}
         />
 
         <ModeBar mode={mode} onChange={setModeSafe} />
