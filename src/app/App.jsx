@@ -47,6 +47,7 @@ export default function App(){
   const modeRef = useRef("build")
   const occupiedRef = useRef(new Set())
   const buildingsRef = useRef([])
+  const buildingsByUidRef = useRef(new Map())
   const economyRef = useRef({ total: 0, statuses: [] })
   const moneyRef = useRef(1000)
   const levelRef = useRef(1)
@@ -93,7 +94,9 @@ export default function App(){
 
   useEffect(() => {
     const s = new Set()
+    const byUid = new Map()
     for (const b of buildings) {
+      byUid.set(b.uid, b)
       const item = catalogById[b.id]
       const cells = getFootprintCells({ gx: b.gx, gz: b.gz }, item?.footprint)
       for (const cell of cells) {
@@ -101,6 +104,7 @@ export default function App(){
       }
     }
     occupiedRef.current = s
+    buildingsByUidRef.current = byUid
   }, [buildings])
 
   useEffect(() => {
@@ -780,6 +784,7 @@ export default function App(){
 
   useEffect(() => {
     let raf
+    let lastUpdate = 0
     const tempVec = new THREE.Vector3()
     const updateLabels = () => {
       const eng = engineRef.current
@@ -787,6 +792,12 @@ export default function App(){
         raf = requestAnimationFrame(updateLabels)
         return
       }
+      const now = performance.now()
+      if (now - lastUpdate < 120) {
+        raf = requestAnimationFrame(updateLabels)
+        return
+      }
+      lastUpdate = now
       const { camera, renderer } = eng
       const width = renderer.domElement.clientWidth
       const height = renderer.domElement.clientHeight
@@ -796,16 +807,20 @@ export default function App(){
       ))
       const labels = []
       for (const status of statuses) {
-        const building = buildingsRef.current.find(b => b.uid === status.uid)
+        const building = buildingsByUidRef.current.get(status.uid)
         const obj = building?.object
         if (!obj) continue
-        let topY = building?.bboxTopY
+        let topY = building?.bboxTopY ?? obj.userData?.bboxTopY
         if (topY == null) {
           const bounds = new THREE.Box3().setFromObject(obj)
           topY = bounds.max.y
           obj.userData.bboxTopY = topY
+          obj.userData.bboxBottomY = bounds.min.y
+          obj.userData.bboxHeight = bounds.max.y - bounds.min.y
         }
-        const buildingHeight = building?.bboxHeight ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
+        const buildingHeight = building?.bboxHeight
+          ?? obj.userData?.bboxHeight
+          ?? Math.max(0.1, topY - (obj.userData?.bboxBottomY ?? 0))
         const offset = Math.max(0.6, buildingHeight * 0.2)
         tempVec.set(obj.position.x, topY + offset, obj.position.z)
         tempVec.project(camera)
