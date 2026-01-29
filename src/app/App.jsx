@@ -6,7 +6,7 @@ import { computeTutorialProgress, steps as tutorialSteps } from "../engine/tutor
 import { computeEconomy } from "../game/economy"
 import { createProgressionState, applyXp, XP_REWARDS } from "../game/progression"
 import { CATALOG, CATEGORIES } from "../assets/catalog"
-import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, ISLAND_RADIUS } from "../game/constants"
+import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
 import { playSound } from "../game/sound"
 import { findPath, findRoadAnchor } from "../game/guests"
 import splashImage from "../assets/ui/splash.png"
@@ -263,6 +263,7 @@ export default function App(){
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mousedown", onMouseDown)
       window.removeEventListener("mouseup", onMouseUp)
+      eng.dispose?.()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportRef])
@@ -270,6 +271,12 @@ export default function App(){
   useEffect(() => {
     engineRef.current?.setPerfDebug(perfDebugEnabled)
   }, [perfDebugEnabled])
+
+  useEffect(() => {
+    if (!levelUp) return () => {}
+    const timer = window.setTimeout(() => setLevelUp(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [levelUp])
 
   useEffect(() => {
     engineRef.current?.setInputLocked(splashPhase !== "done" || bankrupt)
@@ -519,9 +526,10 @@ export default function App(){
     return true
   }
 
-  function withinIsland(gx, gz){
+  function isBuildableSurface(gx, gz){
     const { x, z } = gridToWorld(gx, gz)
-    return Math.sqrt(x * x + z * z) <= (ISLAND_RADIUS - 3)
+    const radius = Math.hypot(x, z)
+    return radius <= GRASS_RADIUS || (radius >= SHORE_INNER_RADIUS && radius <= SHORE_OUTER_RADIUS)
   }
 
   function isWithinGrid(gx, gz){
@@ -531,7 +539,7 @@ export default function App(){
   function validatePlacement({ item, gx, gz }){
     const cells = getFootprintCells({ gx, gz }, item?.footprint)
     for (const cell of cells) {
-      if (!isWithinGrid(cell.gx, cell.gz) || !withinIsland(cell.gx, cell.gz)) {
+      if (!isWithinGrid(cell.gx, cell.gz) || !isBuildableSurface(cell.gx, cell.gz)) {
         return "Can't build there."
       }
       if (occupiedRef.current.has(key(cell.gx, cell.gz))) {
@@ -725,7 +733,7 @@ export default function App(){
       if (drag.placed.has(cellKey)) continue
       drag.placed.add(cellKey)
       const item = catalogById.road
-      if (!isWithinGrid(cell.gx, cell.gz) || !withinIsland(cell.gx, cell.gz)) {
+      if (!isWithinGrid(cell.gx, cell.gz) || !isBuildableSurface(cell.gx, cell.gz)) {
         continue
       }
       const result = placeBuilding({ item, gx: cell.gx, gz: cell.gz, silentInvalid: true })
@@ -745,10 +753,6 @@ export default function App(){
     value: economy.total,
     deltaText: incomeDeltaText,
   }), [economy.total, incomeDeltaText])
-
-  const handleReopenTutorial = useCallback(() => {
-    if (!tutorialDismissed) setTutorialVisible(true)
-  }, [tutorialDismissed])
 
   const handleOpenLoan = useCallback(() => {
     if (!bankrupt) setLoanPanelOpen(true)
@@ -864,9 +868,6 @@ export default function App(){
           income={incomeDisplayState}
           incomeTrend={incomeTrend}
           level={progression.level}
-          xp={progression.xp}
-          xpToNext={progression.xpToNext}
-          onReopenTutorial={handleReopenTutorial}
           onOpenLoan={handleOpenLoan}
           perfEnabled={perfDebugEnabled}
           onTogglePerf={handleTogglePerf}
@@ -888,7 +889,7 @@ export default function App(){
               }}
               level={progression.level}
               hidden={!buildShopOpen}
-              onClose={() => setBuildShopOpen(false)}
+              onClose={() => setModeSafe("camera")}
             />
           </>
         )}

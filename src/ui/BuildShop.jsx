@@ -18,6 +18,9 @@ export default function BuildShop({
 }){
   const visibleItems = items.filter(item => selectedCategory === "All" ? true : item.category === selectedCategory)
   const [jiggleId, setJiggleId] = useState(null)
+  const [activeInfoId, setActiveInfoId] = useState(null)
+
+  const formatIncome = (value) => `+$${value.toFixed(1)} / sec`
 
   return (
     <div
@@ -41,7 +44,7 @@ export default function BuildShop({
           </button>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <div style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--font-display)" }}>Build Shop</div>
+          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "var(--font-display)" }}>Build Shop</div>
         </div>
       </header>
 
@@ -79,7 +82,22 @@ export default function BuildShop({
               }}
             >
               <div className="thumb">
-                <img src={item.iconPath} alt="" style={{ width: 56, height: 56 }} />
+                <img src={item.iconPath} alt="" className="thumb-image" />
+              </div>
+              <button
+                type="button"
+                className="info-icon"
+                onMouseDown={stopUiEvent}
+                onClick={(event) => {
+                  stopUiEvent(event)
+                  setActiveInfoId(prev => (prev === item.id ? null : item.id))
+                }}
+                aria-label={`Info for ${item.name}`}
+              >
+                i
+              </button>
+              <div className={`info-tooltip ${activeInfoId === item.id ? "show" : ""}`}>
+                {formatIncome(item.incomePerSec)}
               </div>
               <div style={{ fontWeight: 900 }}>{item.name}</div>
               <div style={{ fontWeight: 900, color: "#16a34a" }}>${item.cost}</div>
