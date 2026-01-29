@@ -41,6 +41,7 @@ button {
   inset: 0;
   pointer-events: none;
   font-family: var(--font-body);
+  z-index: 20;
 }
 
 .panel {
@@ -51,6 +52,7 @@ button {
   box-shadow: var(--shadow-sticker);
   backdrop-filter: blur(10px);
   animation: panel-pop 0.55s cubic-bezier(0.16, 1.2, 0.3, 1) both;
+  z-index: 30;
 }
 
 @keyframes panel-pop {
@@ -80,6 +82,7 @@ button {
   background: rgba(255, 255, 255, 0.65);
   box-shadow: var(--shadow-sticker);
   pointer-events: auto;
+  z-index: 40;
 }
 
 .hud-pill {
@@ -204,7 +207,7 @@ button {
 .modebtn {
   width: 92px;
   height: 92px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   border: var(--border-thick) solid rgba(36, 15, 54, 0.15);
   background: var(--color-surface-strong);
   box-shadow: var(--shadow-sticker);
@@ -672,7 +675,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  z-index: 10;
+  z-index: 45;
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
@@ -738,6 +741,7 @@ button {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 5;
 }
 
 .perf-debug-panel {

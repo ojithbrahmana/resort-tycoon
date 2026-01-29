@@ -25,10 +25,33 @@ const LOAN_OPTIONS = [
   { principal: 5000, rate: 0.35 },
 ]
 const LOAN_DURATION_SEC = 60
+const BUILT_IN_PALM_COUNT = 14
 
 function createUid(prefix){
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function shuffleArray(list){
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[list[i], list[j]] = [list[j], list[i]]
+  }
+  return list
+}
+
+function getShoreCells(){
+  const cells = []
+  for (let gx = -GRID_HALF; gx <= GRID_HALF; gx += 1) {
+    for (let gz = -GRID_HALF; gz <= GRID_HALF; gz += 1) {
+      const { x, z } = gridToWorld(gx, gz)
+      const radius = Math.hypot(x, z)
+      if (radius >= SHORE_INNER_RADIUS && radius <= SHORE_OUTER_RADIUS) {
+        cells.push({ gx, gz })
+      }
+    }
+  }
+  return cells
 }
 
 function makeConfetti(){
@@ -57,6 +80,7 @@ export default function App(){
   const activeLoanRef = useRef(null)
   const negativeTimerRef = useRef(0)
   const debtTimerRef = useRef(0)
+  const builtInSeedRef = useRef(false)
 
   const [mode, setMode] = useState("build")
   const [category, setCategory] = useState("All")
@@ -259,6 +283,7 @@ export default function App(){
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mousedown", onMouseDown)
     window.addEventListener("mouseup", onMouseUp)
+    seedBuiltInPalms({ replace: true })
     return () => {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mousedown", onMouseDown)
@@ -474,6 +499,49 @@ export default function App(){
     setLoanPanelOpen(false)
   }
 
+  function seedBuiltInPalms({ replace = false } = {}){
+    if (builtInSeedRef.current) return
+    const item = catalogById.palm
+    if (!item) return
+    const candidates = shuffleArray(getShoreCells())
+    const occupied = replace ? new Set() : new Set(occupiedRef.current)
+    const placements = []
+    for (const cell of candidates) {
+      if (placements.length >= BUILT_IN_PALM_COUNT) break
+      const cellKey = key(cell.gx, cell.gz)
+      if (occupied.has(cellKey)) continue
+      occupied.add(cellKey)
+      placements.push(cell)
+    }
+    if (!placements.length) return
+    const entries = placements.map(cell => ({
+      uid: createUid("palm"),
+      id: "palm",
+      gx: cell.gx,
+      gz: cell.gz,
+      cost: 0,
+      object: null,
+      builtIn: true,
+    }))
+    builtInSeedRef.current = true
+    setBuildings(prev => (replace ? entries : [...prev, ...entries]))
+    entries.forEach(entry => {
+      void engineRef.current?.addBuilding({ building: item, gx: entry.gx, gz: entry.gz, uid: entry.uid }).then(obj => {
+        let bboxTopY = null
+        let bboxHeight = null
+        let bboxBottomY = null
+        if (obj) {
+          const bounds = new THREE.Box3().setFromObject(obj)
+          bboxTopY = bounds.max.y
+          bboxHeight = bounds.max.y - bounds.min.y
+          bboxBottomY = bounds.min.y
+          obj.userData = { ...obj.userData, bboxTopY, bboxHeight, bboxBottomY }
+        }
+        setBuildings(prev => prev.map(b => b.uid === entry.uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
+      })
+    })
+  }
+
   function startNewGame(){
     engineRef.current?.resetWorld?.()
     engineRef.current?.setInputLocked(false)
@@ -506,6 +574,8 @@ export default function App(){
     earningOnceRef.current = new Set()
     lastIncomeRef.current = 0
     clearMoveSelection()
+    builtInSeedRef.current = false
+    seedBuiltInPalms({ replace: true })
   }
 
   function setModeSafe(next){
