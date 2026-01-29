@@ -16,14 +16,13 @@ const skeletonClone = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone
 const npcClone = skeletonClone || ((source) => source.clone(true))
 const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
+const sharedDracoLoader = new DRACOLoader()
+sharedDracoLoader.setDecoderPath(DRACO_DECODER_URL)
+const sharedGltfLoader = new GLTFLoader()
+sharedGltfLoader.setDRACOLoader(sharedDracoLoader)
 
 async function addPalmBorder({ scene }) {
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  const gltf = await loader.loadAsync(PALM_MODEL_URL).catch((error) => {
+  const gltf = await sharedGltfLoader.loadAsync(PALM_MODEL_URL).catch((error) => {
     console.error(`Failed to load palm model for border palms from ${PALM_MODEL_URL}.`, error)
     return null
   })
@@ -69,8 +68,8 @@ async function addPalmBorder({ scene }) {
   group.name = "palm-border"
   meshes.forEach((mesh) => {
     const instanced = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length)
-    instanced.castShadow = true
-    instanced.receiveShadow = true
+    instanced.castShadow = false
+    instanced.receiveShadow = false
     const matrix = new THREE.Matrix4()
     placements.forEach((placement, index) => {
       matrix.compose(
@@ -102,6 +101,32 @@ export function createEngine({ container }){
   const camera = createCamera(width,height)
   const controls = attachCameraControls({ dom: renderer.domElement, camera })
   controls.setEnabled?.(false)
+
+  const perfState = {
+    enabled: false,
+    element: null,
+    frames: 0,
+    lastSample: performance.now(),
+    fps: 0,
+  }
+
+  function ensurePerfPanel() {
+    if (perfState.element) return perfState.element
+    const panel = document.createElement("div")
+    panel.className = "perf-debug-panel"
+    panel.style.display = "none"
+    container.appendChild(panel)
+    perfState.element = panel
+    return panel
+  }
+
+  function setPerfDebug(enabled) {
+    perfState.enabled = Boolean(enabled)
+    const panel = ensurePerfPanel()
+    panel.style.display = perfState.enabled ? "block" : "none"
+    perfState.frames = 0
+    perfState.lastSample = performance.now()
+  }
 
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2()
@@ -748,6 +773,18 @@ export function createEngine({ container }){
     const now = performance.now()
     const delta = Math.min(0.05, (now - lastTime) / 1000)
     lastTime = now
+    if (perfState.enabled) {
+      perfState.frames += 1
+      const elapsed = now - perfState.lastSample
+      if (elapsed >= 250) {
+        perfState.fps = Math.round((perfState.frames / elapsed) * 1000)
+        perfState.frames = 0
+        perfState.lastSample = now
+        const panel = ensurePerfPanel()
+        const info = renderer.info
+        panel.textContent = `FPS ${perfState.fps} | Draws ${info.render.calls} | Tris ${info.render.triangles}`
+      }
+    }
     controls.update?.()
     if (shakeTime > 0) {
       shakeTime -= delta
@@ -802,5 +839,6 @@ export function createEngine({ container }){
     shakeCamera,
     getGuestCount: () => npcs.length,
     resetWorld,
+    setPerfDebug,
   }
 }
