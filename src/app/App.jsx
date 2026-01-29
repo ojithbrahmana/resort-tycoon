@@ -19,7 +19,7 @@ import LevelToast from "../ui/LevelToast.jsx"
 
 const catalogById = Object.fromEntries(CATALOG.map(item => [item.id, item]))
 
-const VILLA_IDS = new Set(["villa", "villa_plus"])
+const VILLA_IDS = new Set(["villa", "villa_plus", "reception"])
 const LOAN_OPTIONS = [
   { principal: 500, rate: 0.1 },
   { principal: 2000, rate: 0.2 },
@@ -27,6 +27,15 @@ const LOAN_OPTIONS = [
 ]
 const LOAN_DURATION_SEC = 60
 const BUILT_IN_PALM_COUNT = 14
+const COST_INCREASE_STEP = 50
+const COST_INCREASE_CAP = 200
+const PLACEMENT_BUBBLE_MS = 2500
+
+function getCostIncreaseByCount(count) {
+  if (count < 5) return 0
+  const increase = COST_INCREASE_STEP * (count - 4)
+  return Math.min(COST_INCREASE_CAP, increase)
+}
 
 function createUid(prefix){
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -80,6 +89,7 @@ export default function App(){
   const moveSelectionRef = useRef(null)
   const activeLoanRef = useRef(null)
   const builtInSeedRef = useRef(false)
+  const bubblePlacementTimeoutRef = useRef(null)
 
   const [mode, setMode] = useState("build")
   const [category, setCategory] = useState("All")
@@ -103,9 +113,13 @@ export default function App(){
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
+  const [bubbleHoverType, setBubbleHoverType] = useState(null)
+  const [bubblePinnedType, setBubblePinnedType] = useState(null)
+  const [bubblePlacementType, setBubblePlacementType] = useState(null)
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
+  const activeBubbleTypeRef = useRef(null)
 
   toolRef.current = tool
   modeRef.current = mode
@@ -173,6 +187,37 @@ export default function App(){
     steps: tutorialSteps.map(step => step.text),
   }), [tutorialProgress])
 
+  const buildingCounts = useMemo(() => {
+    const counts = {}
+    for (const building of buildings) {
+      counts[building.id] = (counts[building.id] ?? 0) + 1
+    }
+    return counts
+  }, [buildings])
+
+  const getItemCostForCount = useCallback((item, count) => {
+    if (!item || item.cost === 0) return 0
+    if (item.id === "road" || item.id === "palm") return item.cost
+    return item.cost + getCostIncreaseByCount(count)
+  }, [])
+
+  const getItemCost = useCallback((item) => {
+    const count = buildingCounts[item.id] ?? 0
+    return getItemCostForCount(item, count)
+  }, [buildingCounts, getItemCostForCount])
+
+  const getPlacementCost = useCallback((item) => {
+    if (!item) return 0
+    const count = buildingsRef.current.filter(building => building.id === item.id).length
+    return getItemCostForCount(item, count)
+  }, [getItemCostForCount])
+
+  const activeBubbleType = bubbleHoverType || bubblePinnedType || bubblePlacementType
+
+  useEffect(() => {
+    activeBubbleTypeRef.current = activeBubbleType
+  }, [activeBubbleType])
+
   useEffect(() => {
     const prev = lastIncomeRef.current
     if (economy.total !== prev) {
@@ -239,7 +284,10 @@ export default function App(){
       if (!current) return
       if (splashRef.current !== "done") return
       if (bankrupt) return
-      if (!isCanvasEvent(e)) return
+      if (!isCanvasEvent(e)) {
+        setBubbleHoverType(prev => (prev ? null : prev))
+        return
+      }
       if (modeRef.current === "build") {
         const item = catalogById[toolRef.current]
         current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupiedRef.current })
@@ -271,6 +319,20 @@ export default function App(){
         }
         current.setDemolishOutline?.({ gx: target.gx, gz: target.gz, footprint: item?.footprint })
       }
+
+      if (dragRef.current.active) {
+        setBubbleHoverType(prev => (prev ? null : prev))
+        return
+      }
+      const hit = current.pickIsland?.(e.clientX, e.clientY)
+      if (!hit) {
+        setBubbleHoverType(prev => (prev ? null : prev))
+        return
+      }
+      const { gx, gz } = worldToGrid(hit.x, hit.z)
+      const target = findBuildingAtCell({ gx, gz })
+      const nextType = target?.id ?? null
+      setBubbleHoverType(prev => (prev === nextType ? prev : nextType))
     }
     const onMouseDown = (e) => {
       const current = engineRef.current
@@ -312,6 +374,16 @@ export default function App(){
       if (modeRef.current === "demolish") {
         handleDemolishClick(e)
       }
+      if (modeRef.current === "camera" && e.button === 0) {
+        const hit = current.pickIsland?.(e.clientX, e.clientY)
+        if (!hit) {
+          setBubblePinnedType(null)
+          return
+        }
+        const { gx, gz } = worldToGrid(hit.x, hit.z)
+        const target = findBuildingAtCell({ gx, gz })
+        setBubblePinnedType(target?.id ?? null)
+      }
     }
     const onMouseUp = () => {
       stopDrag()
@@ -319,7 +391,7 @@ export default function App(){
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mousedown", onMouseDown)
     window.addEventListener("mouseup", onMouseUp)
-    seedBuiltInPalms({ replace: true })
+    seedBuiltInPalms({ replace: false })
     return () => {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mousedown", onMouseDown)
@@ -506,6 +578,17 @@ export default function App(){
     playSound("error")
   }
 
+  function triggerPlacementBubble(type){
+    if (!type) return
+    setBubblePlacementType(type)
+    if (bubblePlacementTimeoutRef.current) {
+      window.clearTimeout(bubblePlacementTimeoutRef.current)
+    }
+    bubblePlacementTimeoutRef.current = window.setTimeout(() => {
+      setBubblePlacementType(null)
+    }, PLACEMENT_BUBBLE_MS)
+  }
+
   function takeLoan({ principal, rate }){
     if (activeLoanRef.current) return
     const totalOwed = Math.round(principal * (1 + rate))
@@ -550,7 +633,10 @@ export default function App(){
       builtIn: true,
     }))
     builtInSeedRef.current = true
-    setBuildings(prev => (replace ? entries : [...prev, ...entries]))
+    occupiedRef.current = occupied
+    const nextBuildings = replace ? entries : [...buildingsRef.current, ...entries]
+    buildingsRef.current = nextBuildings
+    setBuildings(nextBuildings)
     entries.forEach(entry => {
       void engineRef.current?.addBuilding({ building: item, gx: entry.gx, gz: entry.gz, uid: entry.uid }).then(obj => {
         let bboxTopY = null
@@ -572,6 +658,7 @@ export default function App(){
     engineRef.current?.resetWorld?.()
     engineRef.current?.setInputLocked(false)
     setBuildings([])
+    buildingsRef.current = []
     occupiedRef.current = new Set()
     setMoney(1000)
     setMoneyDisplay(1000)
@@ -595,11 +682,18 @@ export default function App(){
     setToast(null)
     setLevelUp(null)
     setConfetti([])
+    setBubbleHoverType(null)
+    setBubblePinnedType(null)
+    setBubblePlacementType(null)
+    if (bubblePlacementTimeoutRef.current) {
+      window.clearTimeout(bubblePlacementTimeoutRef.current)
+      bubblePlacementTimeoutRef.current = null
+    }
     earningOnceRef.current = new Set()
     lastIncomeRef.current = 0
     clearMoveSelection()
     builtInSeedRef.current = false
-    seedBuiltInPalms({ replace: true })
+    seedBuiltInPalms({ replace: false })
   }
 
   function setModeSafe(next){
@@ -607,6 +701,7 @@ export default function App(){
     engineRef.current?.setMode(next)
     if (next === "build") {
       setBuildShopOpen(true)
+      setLoanPanelOpen(false)
     } else {
       setBuildShopOpen(false)
     }
@@ -652,7 +747,14 @@ export default function App(){
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
     }
-    if (moneyRef.current < item.cost) {
+    if (item.id === "reception") {
+      const existingReception = buildingsRef.current.some(building => building.id === "reception")
+      if (existingReception) {
+        return "Only one Reception is allowed."
+      }
+    }
+    const itemCost = getPlacementCost(item)
+    if (moneyRef.current < itemCost) {
       return "Not enough coins!"
     }
     return null
@@ -666,16 +768,19 @@ export default function App(){
     }
 
     const uid = createUid(item.id)
-    const entry = { uid, id: item.id, gx, gz, cost: item.cost, object: null }
-    setBuildings(prev => [...prev, entry])
+    const itemCost = getPlacementCost(item)
+    const entry = { uid, id: item.id, gx, gz, cost: itemCost, object: null }
+    buildingsRef.current = [...buildingsRef.current, entry]
+    setBuildings(buildingsRef.current)
     const occupiedCells = getFootprintCells({ gx, gz }, item?.footprint)
     for (const cell of occupiedCells) {
       occupiedRef.current.add(key(cell.gx, cell.gz))
     }
-    moneyRef.current -= item.cost
-    setMoney(prev => prev - item.cost)
+    moneyRef.current -= itemCost
+    setMoney(prev => prev - itemCost)
     addXp(Math.round(XP_REWARDS.BUILDING_BASE * item.buildingTier))
     playSound("place")
+    triggerPlacementBubble(item.id)
 
     void engineRef.current?.addBuilding({ building: item, gx, gz, uid }).then(obj => {
       let bboxTopY = null
@@ -748,6 +853,7 @@ export default function App(){
     moveSelectionRef.current = null
     engineRef.current?.clearSelectionOutline?.()
     engineRef.current?.clearGhost?.()
+    setBubblePinnedType(null)
   }
 
   function selectMoveBuilding(building){
@@ -755,6 +861,7 @@ export default function App(){
     const item = catalogById[building.id]
     moveSelectionRef.current = building
     engineRef.current?.setSelectionOutline?.({ gx: building.gx, gz: building.gz, footprint: item?.footprint })
+    setBubblePinnedType(building.id)
   }
 
   function handleMoveClick(event){
@@ -820,7 +927,9 @@ export default function App(){
     const cells = getFootprintCells({ gx: target.gx, gz: target.gz }, item?.footprint)
     cells.forEach(cell => occupiedRef.current.delete(key(cell.gx, cell.gz)))
     eng.removePlacedObject(target.object)
-    setBuildings(prev => prev.filter(b => b.uid !== target.uid))
+    const nextBuildings = buildingsRef.current.filter(b => b.uid !== target.uid)
+    buildingsRef.current = nextBuildings
+    setBuildings(nextBuildings)
     clearMoveSelection()
     eng.clearDemolishOutline?.()
   }
@@ -863,7 +972,9 @@ export default function App(){
   const expenseDisplayState = useMemo(() => economy.expenses, [economy.expenses])
 
   const handleOpenLoan = useCallback(() => {
-    if (!bankrupt) setLoanPanelOpen(true)
+    if (bankrupt) return
+    setModeSafe("camera")
+    setLoanPanelOpen(true)
   }, [bankrupt])
 
   const splashVisible = splashPhase !== "done"
@@ -910,9 +1021,16 @@ export default function App(){
       const { camera, renderer } = eng
       const width = renderer.domElement.clientWidth
       const height = renderer.domElement.clientHeight
+      const activeType = activeBubbleTypeRef.current
+      if (!activeType) {
+        setRevenueLabels(prev => (prev.length ? [] : prev))
+        raf = requestAnimationFrame(updateLabels)
+        return
+      }
       const statuses = economyRef.current.statuses.filter(status => (
         status.active
         && status.incomePerSec > 0
+        && status.id === activeType
       ))
       const labels = []
       for (const status of statuses) {
@@ -1031,6 +1149,7 @@ export default function App(){
                 engineRef.current?.setTool(id)
               }}
               level={progression.level}
+              getItemCost={getItemCost}
               hidden={!buildShopOpen}
               onClose={() => setModeSafe("camera")}
             />

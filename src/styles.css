@@ -490,6 +490,8 @@ button {
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 800;
+  display: grid;
+  gap: 4px;
   border: var(--border-thin) solid rgba(59, 130, 246, 0.3);
   box-shadow: var(--shadow-sticker);
   opacity: 0;
@@ -498,7 +500,15 @@ button {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.card:hover .info-tooltip,
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 150px;
+}
+
+.info-icon:hover + .info-tooltip,
 .info-tooltip.show {
   opacity: 1;
   transform: translateY(0);

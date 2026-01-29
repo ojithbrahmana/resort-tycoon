@@ -12,6 +12,7 @@ const SPA_MODEL_URL = new URL("../assets/models/spa.final.glb", import.meta.url)
 const POOL_MODEL_URL = new URL("../assets/models/pool.final.glb", import.meta.url).toString()
 const BEACH_DJ_MODEL_URL = new URL("../assets/models/beachdj.final.glb", import.meta.url).toString()
 const BURGER_SHOP_MODEL_URL = new URL("../assets/models/burgershop.final.glb", import.meta.url).toString()
+const RECEPTION_MODEL_URL = new URL("../assets/models/reception.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
 const sharedDracoLoader = new DRACOLoader()
 sharedDracoLoader.setDecoderPath(DRACO_DECODER_URL)
@@ -41,6 +42,9 @@ let beachDjScaleFactor = 1
 let burgerShopModel = null
 let burgerShopModelPromise = null
 let burgerShopScaleFactor = 1
+let receptionModel = null
+let receptionModelPromise = null
+let receptionScaleFactor = 1
 const MODEL_BRIGHTNESS_FACTOR = 1.35
 
 function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
@@ -138,6 +142,7 @@ export function preloadBuildingModels() {
     loadPoolModel(),
     loadBeachDjModel(),
     loadBurgerShopModel(),
+    loadReceptionModel(),
   ])
 }
 
@@ -535,6 +540,53 @@ async function createBurgerShopModel() {
   return group
 }
 
+function loadReceptionModel() {
+  if (receptionModelPromise) return receptionModelPromise
+  receptionModelPromise = sharedGltfLoader.loadAsync(RECEPTION_MODEL_URL)
+    .then((gltf) => {
+      receptionModel = gltf.scene
+      receptionModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      })
+      applyModelBrightness(receptionModel)
+      receptionModel.updateMatrixWorld(true)
+      const bounds = new THREE.Box3().setFromObject(receptionModel)
+      const size = new THREE.Vector3()
+      bounds.getSize(size)
+      const footprint = Math.max(size.x, size.z) || 1
+      const targetFootprint = GRID_SIZE * 4
+      receptionScaleFactor = targetFootprint / footprint
+      return receptionModel
+    })
+    .catch((error) => {
+      console.error(`Failed to load Reception model from ${RECEPTION_MODEL_URL}.`, error)
+      return null
+    })
+
+  return receptionModelPromise
+}
+
+async function createReceptionModel() {
+  const model = await loadReceptionModel()
+  if (!model) {
+    return null
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(receptionScaleFactor)
+  clone.updateMatrixWorld(true)
+  cloneMaterialsForInstance(clone)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset + 0.05
+  const group = new THREE.Group()
+  group.add(createContactShadow(2.8))
+  group.add(clone)
+  return group
+}
+
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa") {
     const object = await createVillaModel({ scaleMultiplier: 1 })
@@ -573,6 +625,13 @@ export async function createBuildingObject({ building, spritePath, size = 3.6 })
   }
   if (building?.id === "burgershop") {
     const object = await createBurgerShopModel()
+    if (object) {
+      return { object, isModel: true }
+    }
+    return { object: makeBillboardSprite(spritePath, size), isModel: false }
+  }
+  if (building?.id === "reception") {
+    const object = await createReceptionModel()
     if (object) {
       return { object, isModel: true }
     }
