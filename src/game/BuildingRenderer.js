@@ -124,7 +124,7 @@ function createContactShadow(radius) {
   return shadow
 }
 
-function createVillaMesh({ upgraded = false }) {
+function createVillaMesh({ upgraded = false, scaleMultiplier = 1 }) {
   const group = new THREE.Group()
   const baseMat = new THREE.MeshStandardMaterial({
     color: upgraded ? 0xdbeafe : 0xfbcfe8,
@@ -157,26 +157,27 @@ function createVillaMesh({ upgraded = false }) {
   trim.castShadow = true
   markDisposable(trim, { geometry: true, material: true })
 
-  group.add(createContactShadow(1.6))
+  group.add(createContactShadow(1.6 * scaleMultiplier))
   group.add(base, trim, roof)
+  group.scale.setScalar(scaleMultiplier)
   applyModelBrightness(group)
   return group
 }
 
-async function createVillaModel() {
+async function createVillaModel({ scaleMultiplier = 1, upgraded = false } = {}) {
   const model = await loadVillaModel()
   if (!model) {
-    return createVillaMesh({ upgraded: false })
+    return createVillaMesh({ upgraded, scaleMultiplier })
   }
   const clone = model.clone(true)
-  clone.scale.setScalar(villaScaleFactor)
+  clone.scale.setScalar(villaScaleFactor * scaleMultiplier)
   clone.updateMatrixWorld(true)
   cloneMaterialsForInstance(clone)
   const scaledBounds = new THREE.Box3().setFromObject(clone)
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
   const group = new THREE.Group()
-  group.add(createContactShadow(1.6))
+  group.add(createContactShadow(1.6 * scaleMultiplier))
   group.add(clone)
   return group
 }
@@ -197,7 +198,7 @@ function loadIceCreamModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 3
+    const targetFootprint = GRID_SIZE * 2
     iceCreamScaleFactor = targetFootprint / footprint
     return iceCreamModel
   })
@@ -277,7 +278,7 @@ function loadPalmModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 2
+    const targetFootprint = GRID_SIZE * 1
     palmScaleFactor = targetFootprint / footprint
     return palmModel
   })
@@ -319,7 +320,7 @@ function loadSpaModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 4
+    const targetFootprint = GRID_SIZE * 3
     spaScaleFactor = targetFootprint / footprint
     return spaModel
   })
@@ -483,7 +484,8 @@ async function createBurgerShopModel() {
 
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa" || building?.id === "villa_plus") {
-    const object = await createVillaModel()
+    const scaleMultiplier = building.id === "villa_plus" ? 1.5 : 1
+    const object = await createVillaModel({ scaleMultiplier, upgraded: building.id === "villa_plus" })
     return { object, isModel: true }
   }
   if (building?.id === "icecream_parlour") {
