@@ -113,16 +113,21 @@ export function computeEconomy({
   catalogById,
   guests,
   level,
+  happiness,
+  loanPaymentPerSec = 0,
 }: {
   buildings: BuildingInstance[]
   catalogById: Record<string, BuildingCatalogItem>
   guests: number
   level: number
+  happiness: number
+  loanPaymentPerSec?: number
 }){
   const generators = buildings.filter(b => b.id === "generator")
   const generatorRadius = catalogById.generator?.powerRadius ?? DEFAULT_POWER_RADIUS
   const statuses: EconomyStatus[] = []
   let income = 0
+  const incomeMultiplier = Math.max(1, 1 + (happiness / 100) * 0.5)
 
   for (const b of buildings) {
     const item = catalogById[b.id]
@@ -135,7 +140,7 @@ export function computeEconomy({
       ? isPowered({ gx: b.gx, gz: b.gz, generators, powerRadius: generatorRadius })
       : true
     const active = roadOk && powerOk
-    const incomePerSec = active ? item.incomePerSec : 0
+    const incomePerSec = active ? Math.round(item.incomePerSec * incomeMultiplier) : 0
 
     statuses.push({ uid: b.uid, id: b.id, gx: b.gx, gz: b.gz, active, roadOk, powerOk, incomePerSec })
     income += incomePerSec
@@ -171,9 +176,10 @@ export function computeEconomy({
         levelScale
     )
   )
-  const expenses = income > 0 ? Math.min(rawExpenses, Math.round(income * 0.6)) : 0
+  const cappedExpenses = income > 0 ? Math.min(rawExpenses, Math.round(income * 0.2)) : 0
+  const expenses = cappedExpenses + Math.round(loanPaymentPerSec)
 
-  const total = income - expenses
+  const total = income - cappedExpenses
 
   return { total, income, expenses, statuses }
 }

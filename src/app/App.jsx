@@ -144,11 +144,6 @@ export default function App(){
   }, [])
 
   const guestCount = useMemo(() => computeGuestCount({ buildings }), [buildings])
-  const economy = useMemo(
-    () => computeEconomy({ buildings, catalogById, guests: guestCount, level: progression.level }),
-    [buildings, catalogById, guestCount, progression.level]
-  )
-  economyRef.current = economy
   const happiness = useMemo(
     () => computeHappiness({
       buildings,
@@ -158,6 +153,18 @@ export default function App(){
     }),
     [buildings, catalogById, money, activeLoan]
   )
+  const economy = useMemo(
+    () => computeEconomy({
+      buildings,
+      catalogById,
+      guests: guestCount,
+      level: progression.level,
+      happiness,
+      loanPaymentPerSec: activeLoan?.paymentPerSecond ?? 0,
+    }),
+    [buildings, catalogById, guestCount, progression.level, happiness, activeLoan]
+  )
+  economyRef.current = economy
 
   const tutorialProgress = useMemo(() => computeTutorialProgress({ buildings }), [buildings])
   const tutorial = useMemo(() => ({
