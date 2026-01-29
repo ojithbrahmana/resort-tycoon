@@ -1,4 +1,5 @@
 export const steps = [
+  { id:"reception", text:"Your Reception is open. Guests will start arriving.", done: (s)=> s.buildings.some(b=>b.id==="reception") },
   { id:"villa", text:"Build a Villa (the money-maker).", done: (s)=> s.buildings.some(b=>b.id==="villa") },
   { id:"gen", text:"Build a Generator within 6 tiles of the Villa.", done: (s)=> {
       const v = s.buildings.find(b=>b.id==="villa"); if(!v) return false;

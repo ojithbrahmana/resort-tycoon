@@ -490,12 +490,22 @@ button {
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 800;
+  display: grid;
+  gap: 4px;
   border: var(--border-thin) solid rgba(59, 130, 246, 0.3);
   box-shadow: var(--shadow-sticker);
   opacity: 0;
   transform: translateY(-6px);
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 150px;
 }
 
 .card:hover .info-tooltip,

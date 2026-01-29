@@ -20,6 +20,7 @@ export type EconomyStatus = {
 }
 
 const GUEST_SOURCE_IDS = new Set([
+  "reception",
   "villa",
   "villa_plus",
   "beachclub",
@@ -30,7 +31,7 @@ const GUEST_SOURCE_IDS = new Set([
   "spa",
 ])
 
-const HAPPINESS_ATTRACTION_IDS = new Set([
+export const HAPPINESS_ATTRACTION_IDS = new Set([
   "nightbar",
   "beachclub",
   "pool",
@@ -40,7 +41,8 @@ const HAPPINESS_ATTRACTION_IDS = new Set([
   "icecream_parlour",
 ])
 
-const GUEST_WEIGHTS: Record<string, number> = {
+export const GUEST_WEIGHTS: Record<string, number> = {
+  reception: 8,
   villa: 6,
   villa_plus: 10,
   beachclub: 12,
