@@ -163,7 +163,7 @@ function createVillaMesh({ upgraded = false }) {
   return group
 }
 
-async function createVillaModel() {
+async function createVillaModel({ scaleMultiplier = 1 } = {}) {
   const model = await loadVillaModel()
   if (!model) {
     return createVillaMesh({ upgraded: false })
@@ -178,6 +178,10 @@ async function createVillaModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.6))
   group.add(clone)
+  if (scaleMultiplier !== 1) {
+    group.scale.setScalar(scaleMultiplier)
+    group.updateMatrixWorld(true)
+  }
   return group
 }
 
@@ -197,7 +201,7 @@ function loadIceCreamModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 3
+    const targetFootprint = GRID_SIZE * 2
     iceCreamScaleFactor = targetFootprint / footprint
     return iceCreamModel
   })
@@ -218,7 +222,7 @@ async function createIceCreamModel() {
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
   const group = new THREE.Group()
-  group.add(createContactShadow(2.2))
+  group.add(createContactShadow(1.6))
   group.add(clone)
   return group
 }
@@ -277,7 +281,7 @@ function loadPalmModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 2
+    const targetFootprint = GRID_SIZE
     palmScaleFactor = targetFootprint / footprint
     return palmModel
   })
@@ -319,7 +323,7 @@ function loadSpaModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 4
+    const targetFootprint = GRID_SIZE * 3
     spaScaleFactor = targetFootprint / footprint
     return spaModel
   })
@@ -340,7 +344,7 @@ async function createSpaModel() {
   const yOffset = -scaledBounds.min.y
   clone.position.y += yOffset
   const group = new THREE.Group()
-  group.add(createContactShadow(2.8))
+  group.add(createContactShadow(2.4))
   group.add(clone)
   return group
 }
@@ -483,7 +487,8 @@ async function createBurgerShopModel() {
 
 export async function createBuildingObject({ building, spritePath, size = 3.6 }){
   if (building?.id === "villa" || building?.id === "villa_plus") {
-    const object = await createVillaModel()
+    const scaleMultiplier = building.id === "villa_plus" ? 1.5 : 1
+    const object = await createVillaModel({ scaleMultiplier })
     return { object, isModel: true }
   }
   if (building?.id === "icecream_parlour") {

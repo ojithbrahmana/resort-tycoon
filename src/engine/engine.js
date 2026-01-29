@@ -6,7 +6,7 @@ import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
 import { GRID_SIZE, GRID_HALF, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
-import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
+import { makeBillboardSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
 import { loadNpcModel } from "./npcLoader.js"
@@ -37,6 +37,9 @@ export function createEngine({ container }){
   const camera = createCamera(width,height)
   const controls = attachCameraControls({ dom: renderer.domElement, camera })
   controls.setEnabled?.(false)
+  renderer.setClearColor(scene.background ?? 0x8ae3ff, 1)
+  renderer.clear()
+  renderer.render(scene, camera)
 
   const perfState = {
     enabled: false,
@@ -74,7 +77,6 @@ export function createEngine({ container }){
 
   const popups = []
   const npcs = []
-  const villaStatus = new Map()
   const sparkles = []
   const placementBounces = []
 
@@ -376,38 +378,7 @@ export function createEngine({ container }){
     disposeObject(obj)
   }
 
-  function updateVillaStatus({ uid, gx, gz, roadOk, powerOk, active, footprint }){
-    let status = villaStatus.get(uid)
-    if (!status) {
-      status = {
-        road: makeIconSprite({ emoji: "🛣️", background: "#ff5b5b" }),
-        power: makeIconSprite({ emoji: "⚡", background: "#ff5b5b" }),
-        coin: makeIconSprite({ emoji: "🪙", background: "#22c55e" }),
-        pulse: 0,
-      }
-      status.road.userData.disposeMaterial = true
-      status.power.userData.disposeMaterial = true
-      status.coin.userData.disposeMaterial = true
-      status.road.position.set(0, 9, 0)
-      status.power.position.set(0, 9, 0)
-      status.coin.position.set(0, 9, 0)
-      buildGroup.add(status.road)
-      buildGroup.add(status.power)
-      buildGroup.add(status.coin)
-      villaStatus.set(uid, status)
-    }
-
-    const { x, z } = getFootprintCenter({ gx, gz }, footprint)
-    const baseY = 9.2
-
-    status.road.position.set(x - 1.4, baseY, z)
-    status.power.position.set(x + 1.4, baseY, z)
-    status.coin.position.set(x, baseY + 0.6, z)
-
-    status.road.visible = !roadOk
-    status.power.visible = !powerOk
-    status.coin.visible = active
-  }
+  function updateVillaStatus() {}
 
   function spawnPopup({ text, gx, gz, color = "#22c55e" }){
     const { x, z } = gridToWorld(gx, gz)
@@ -672,14 +643,6 @@ export function createEngine({ container }){
       }
     }
 
-    for (const status of villaStatus.values()) {
-      status.pulse += delta
-      if (status.coin.visible) {
-        const scale = 1 + Math.sin(status.pulse * 6) * 0.08
-        status.coin.scale.set(scale * 2.2, scale * 2.2, 1)
-      }
-    }
-
     for (let i = placementBounces.length - 1; i >= 0; i -= 1) {
       const bounce = placementBounces[i]
       bounce.time += delta
@@ -813,7 +776,6 @@ export function createEngine({ container }){
     sparkles.length = 0
     placementBounces.length = 0
     npcs.length = 0
-    villaStatus.clear()
     roadSystem.clear()
     npcSpawnTimer = 0
   }

@@ -79,7 +79,7 @@ button {
   gap: 12px;
   padding: 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.65);
+  background: #fff6e8;
   box-shadow: var(--shadow-sticker);
   pointer-events: auto;
   z-index: 40;
@@ -105,13 +105,18 @@ button {
   gap: 6px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: #fff;
+  background: #fef3c7;
   border: var(--border-thin) solid rgba(36, 15, 54, 0.12);
   font-weight: 800;
   font-size: 14px;
   box-shadow: var(--shadow-inner);
   white-space: nowrap;
   text-transform: uppercase;
+}
+
+.hud-pill-primary {
+  background: #86f31d;
+  color: #1f3b05;
 }
 
 .hud-pill-stack {
@@ -212,7 +217,7 @@ button {
 .modebar {
   position: fixed;
   left: var(--space-2);
-  top: 50%;
+  top: 45%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
@@ -248,7 +253,7 @@ button {
 
 .modebtn.active {
   background: linear-gradient(180deg, #ffffff, #fff1f7);
-  border-color: rgba(255, 122, 199, 0.6);
+  border-color: #f59e0b59;
 }
 
 .modebtn span {
@@ -264,7 +269,7 @@ button {
 .drawer {
   position: fixed;
   right: var(--space-2);
-  top: 96px;
+  top: 150px;
   bottom: var(--space-2);
   width: 380px;
   display: flex;
@@ -332,7 +337,7 @@ button {
 .chip.active {
   background: var(--color-secondary);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: #f59e0b59;
 }
 
 .grid {
@@ -368,7 +373,7 @@ button {
 }
 
 .card.active {
-  border-color: rgba(255, 122, 199, 0.7);
+  border-color: #f59e0b59;
   background: #fff1f7;
 }
 

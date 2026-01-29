@@ -5,16 +5,16 @@ const stopUiEvent = (event) => {
   event.stopPropagation()
 }
 
-function HUD({ money, income, incomeTrend, level, onOpenLoan, perfEnabled, onTogglePerf }){
+function HUD({ money, income, incomeTrend, level, onOpenLoan }){
   const formattedMoney = `$${money.value.toLocaleString()}`
   const formattedIncome = `Income $${income.value.toLocaleString()}/s`
   return (
     <div id="hud" className="hud" onMouseDown={stopUiEvent}>
-      <div className={`hud-pill hud-pill-stack ${money.bump ? "bump" : ""}`}>
+      <div className={`hud-pill hud-pill-stack hud-pill-primary ${money.bump ? "bump" : ""}`}>
         <div className="hud-label">💰 Bank Balance</div>
         <div className="hud-value">{formattedMoney}</div>
       </div>
-      <div className={`hud-pill hud-pill-stack ${incomeTrend === "up" ? "bump" : incomeTrend === "down" ? "shake" : ""}`}>
+      <div className={`hud-pill hud-pill-stack hud-pill-primary ${incomeTrend === "up" ? "bump" : incomeTrend === "down" ? "shake" : ""}`}>
         <div className="hud-label">📈 Income</div>
         <div className="hud-value">{formattedIncome}</div>
         {income.deltaText && (
@@ -34,17 +34,6 @@ function HUD({ money, income, incomeTrend, level, onOpenLoan, perfEnabled, onTog
         }}
       >
         💰 <span>Get Loan</span>
-      </button>
-      <button
-        className={`hud-pill ${perfEnabled ? "hud-pill-active" : "hud-pill-muted"}`}
-        type="button"
-        onMouseDown={stopUiEvent}
-        onClick={(event) => {
-          stopUiEvent(event)
-          onTogglePerf?.()
-        }}
-      >
-        🛠 <span>Perf Debug</span>
       </button>
     </div>
   )
