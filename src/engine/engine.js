@@ -2,11 +2,11 @@ import * as THREE from "three"
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
-import { createScene } from "./scene.js"
+import { BUILD_OVERLAY_Y, PREVIEW_OVERLAY_Y, TERRAIN_Y, createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
 import { GRID_SIZE, GRID_HALF, GRASS_RADIUS, SHORE_INNER_RADIUS, SHORE_OUTER_RADIUS } from "../game/constants"
-import { makeBillboardSprite, makeIconSprite, makeTextSprite } from "./sprites.js"
+import { makeBillboardSprite, makeTextSprite } from "./sprites.js"
 import { createBuildingObject, preloadBuildingModels } from "../game/BuildingRenderer.js"
 import { RoadSystem } from "./roads.js"
 import { loadNpcModel } from "./npcLoader.js"
@@ -66,7 +66,7 @@ export function createEngine({ container }){
 
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2()
-  const groundY = 3.1
+  const groundY = TERRAIN_Y
 
   const buildGroup = new THREE.Group()
   scene.add(buildGroup)
@@ -189,7 +189,7 @@ export function createEngine({ container }){
     return hits[0].point
   }
 
-  function createFootprintOutline({ w, h, color = 0x22c55e }) {
+  function createFootprintOutline({ w, h, color = 0x22c55e, y = BUILD_OVERLAY_Y, renderOrder = 2 }) {
     const width = GRID_SIZE * w
     const height = GRID_SIZE * h
     const geometry = new THREE.PlaneGeometry(width, height)
@@ -197,7 +197,10 @@ export function createEngine({ container }){
     const material = new THREE.LineBasicMaterial({ color })
     const outline = new THREE.LineSegments(edges, material)
     outline.rotation.x = -Math.PI / 2
-    outline.position.y = groundY + 0.12
+    outline.position.y = y
+    outline.renderOrder = renderOrder
+    outline.material.depthWrite = false
+    outline.material.depthTest = false
     outline.userData.footprint = { w, h }
     outline.userData.disposeGeometry = true
     outline.userData.disposeMaterial = true
@@ -212,7 +215,7 @@ export function createEngine({ container }){
       buildGroup.remove(ghost)
       ghost = null
     }
-    ghost = createFootprintOutline(nextFootprint)
+    ghost = createFootprintOutline({ ...nextFootprint, y: PREVIEW_OVERLAY_Y, renderOrder: 3 })
     buildGroup.add(ghost)
   }
 
@@ -230,7 +233,7 @@ export function createEngine({ container }){
       buildGroup.add(selectionOutline)
     }
     const { x, z } = getFootprintCenter({ gx, gz }, nextFootprint)
-    selectionOutline.position.set(x, groundY + 0.22, z)
+    selectionOutline.position.set(x, BUILD_OVERLAY_Y, z)
     selectionOutline.material.color.setHex(0xf59e0b)
     selectionOutline.userData = { ...selectionOutline.userData, gx, gz, footprint: nextFootprint }
   }
@@ -249,7 +252,7 @@ export function createEngine({ container }){
       buildGroup.add(demolishOutline)
     }
     const { x, z } = getFootprintCenter({ gx, gz }, nextFootprint)
-    demolishOutline.position.set(x, groundY + 0.22, z)
+    demolishOutline.position.set(x, BUILD_OVERLAY_Y, z)
     demolishOutline.material.color.setHex(0xef4444)
     demolishOutline.userData = { ...demolishOutline.userData, gx, gz, footprint: nextFootprint }
   }
@@ -284,7 +287,7 @@ export function createEngine({ container }){
     }
     const { x, z } = gridToWorld(center.gx, center.gz)
     ensureGhost({ footprint: { w, h } })
-    ghost.position.set(x, groundY + 0.2, z)
+    ghost.position.set(x, PREVIEW_OVERLAY_Y, z)
     ghost.material.color.setHex(ok ? 0x22c55e : 0xef4444)
     ghost.userData = { ...ghost.userData, gx, gz, ok }
     onHover?.({ gx, gz, ok })
@@ -376,37 +379,17 @@ export function createEngine({ container }){
     disposeObject(obj)
   }
 
-  function updateVillaStatus({ uid, gx, gz, roadOk, powerOk, active, footprint }){
-    let status = villaStatus.get(uid)
-    if (!status) {
-      status = {
-        road: makeIconSprite({ emoji: "🛣️", background: "#ff5b5b" }),
-        power: makeIconSprite({ emoji: "⚡", background: "#ff5b5b" }),
-        coin: makeIconSprite({ emoji: "🪙", background: "#22c55e" }),
-        pulse: 0,
-      }
-      status.road.userData.disposeMaterial = true
-      status.power.userData.disposeMaterial = true
-      status.coin.userData.disposeMaterial = true
-      status.road.position.set(0, 9, 0)
-      status.power.position.set(0, 9, 0)
-      status.coin.position.set(0, 9, 0)
-      buildGroup.add(status.road)
-      buildGroup.add(status.power)
-      buildGroup.add(status.coin)
-      villaStatus.set(uid, status)
+  function updateVillaStatus({ uid }){
+    const status = villaStatus.get(uid)
+    if (status) {
+      buildGroup.remove(status.road)
+      buildGroup.remove(status.power)
+      buildGroup.remove(status.coin)
+      disposeObject(status.road)
+      disposeObject(status.power)
+      disposeObject(status.coin)
+      villaStatus.delete(uid)
     }
-
-    const { x, z } = getFootprintCenter({ gx, gz }, footprint)
-    const baseY = 9.2
-
-    status.road.position.set(x - 1.4, baseY, z)
-    status.power.position.set(x + 1.4, baseY, z)
-    status.coin.position.set(x, baseY + 0.6, z)
-
-    status.road.visible = !roadOk
-    status.power.visible = !powerOk
-    status.coin.visible = active
   }
 
   function spawnPopup({ text, gx, gz, color = "#22c55e" }){

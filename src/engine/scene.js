@@ -1,6 +1,11 @@
 import * as THREE from "three"
 import { GRID_HALF, GRID_SIZE, ISLAND_RADIUS } from "../game/constants"
 
+export const TERRAIN_Y = 3.0
+export const GRID_Y = TERRAIN_Y + 0.01
+export const BUILD_OVERLAY_Y = TERRAIN_Y + 0.02
+export const PREVIEW_OVERLAY_Y = TERRAIN_Y + 0.03
+
 export function createScene(){
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x8ae3ff)
@@ -44,7 +49,7 @@ export function createScene(){
     new THREE.MeshStandardMaterial({ color: 0xfed7aa, roughness: 0.95 })
   )
   shore.rotation.x = -Math.PI / 2
-  shore.position.y = 3.05
+  shore.position.y = TERRAIN_Y + 0.04
   shore.receiveShadow = false
   scene.add(shore)
 
@@ -54,16 +59,19 @@ export function createScene(){
     new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.85 })
   )
   grass.rotation.x = -Math.PI / 2
-  grass.position.y = 3.02
+  grass.position.y = TERRAIN_Y
   grass.receiveShadow = false
   scene.add(grass)
 
   // subtle grid
   const gridSize = GRID_SIZE * GRID_HALF * 2
   const grid = new THREE.GridHelper(gridSize, gridSize / GRID_SIZE, 0x0f766e, 0x0f766e)
-  grid.position.y = 3.1
+  grid.position.y = GRID_Y
   grid.material.opacity = 0.08
   grid.material.transparent = true
+  grid.material.depthWrite = false
+  grid.material.depthTest = false
+  grid.renderOrder = 1
   scene.add(grid)
 
   return { scene, island }

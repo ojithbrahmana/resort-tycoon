@@ -104,7 +104,7 @@ export default function App(){
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
-  const [perfDebugEnabled, setPerfDebugEnabled] = useState(Boolean(import.meta.env?.DEV))
+  const perfDebugEnabled = false
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
@@ -819,7 +819,10 @@ export default function App(){
     if (!item) return
     const cells = getFootprintCells({ gx: target.gx, gz: target.gz }, item?.footprint)
     cells.forEach(cell => occupiedRef.current.delete(key(cell.gx, cell.gz)))
-    eng.removePlacedObject(target.object)
+    const removeTarget = target.object ?? (target.id === "road" ? { type: "road", gx: target.gx, gz: target.gz } : null)
+    if (removeTarget) {
+      eng.removePlacedObject(removeTarget)
+    }
     setBuildings(prev => prev.filter(b => b.uid !== target.uid))
     clearMoveSelection()
     eng.clearDemolishOutline?.()
@@ -864,10 +867,6 @@ export default function App(){
   const handleOpenLoan = useCallback(() => {
     if (!bankrupt) setLoanPanelOpen(true)
   }, [bankrupt])
-
-  const handleTogglePerf = useCallback(() => {
-    setPerfDebugEnabled(prev => !prev)
-  }, [])
 
   const splashVisible = splashPhase !== "done"
   const showLogo = tutorialDismissed || !tutorialVisible
@@ -982,8 +981,6 @@ export default function App(){
           incomeTrend={incomeTrend}
           level={progression.level}
           onOpenLoan={handleOpenLoan}
-          perfEnabled={perfDebugEnabled}
-          onTogglePerf={handleTogglePerf}
         />
 
         <ModeBar mode={mode} onChange={setModeSafe} />
