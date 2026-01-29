@@ -295,9 +295,9 @@ export function createEngine({ container }){
     let status = villaStatus.get(uid)
     if (!status) {
       status = {
-        road: makeIconSprite({ emoji: "🛣️", background: "#ff5b5b" }),
-        power: makeIconSprite({ emoji: "⚡", background: "#ff5b5b" }),
-        coin: makeIconSprite({ emoji: "🪙", background: "#22c55e" }),
+        road: makeIconSprite({ label: "R", background: "#ff5b5b" }),
+        power: makeIconSprite({ label: "P", background: "#ff5b5b" }),
+        coin: makeIconSprite({ label: "$", background: "#22c55e" }),
         pulse: 0,
       }
       status.road.position.set(0, 9, 0)

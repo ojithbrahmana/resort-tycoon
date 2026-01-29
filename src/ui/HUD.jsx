@@ -10,7 +10,7 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
   return (
     <div id="hud" className="hud" onMouseDown={stopUiEvent}>
       <div className={`hud-pill ${money.bump ? "bump" : ""}`}>
-        🪙 ${money.value}
+        Cash ${money.value}
       </div>
       <div className={`hud-pill ${incomeTrend === "up" ? "bump" : incomeTrend === "down" ? "shake" : ""}`}>
         ${income.value}
@@ -20,7 +20,7 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
           </span>
         )}
       </div>
-      <div className="hud-pill">LEVEL ⭐{level}</div>
+      <div className="hud-pill">LEVEL {level}</div>
       <div className="hud-pill hud-pill-muted">{xpPct}%</div>
       <button
         className="hud-pill hud-loan"
@@ -31,7 +31,7 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
           onOpenLoan?.()
         }}
       >
-        💰 <span>Loan</span>
+        <span>Loan</span>
       </button>
       <button
         className="hud-pill hud-help"
@@ -42,7 +42,7 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
           onReopenTutorial?.()
         }}
       >
-        ❔ <span>Re-open tutorial</span>
+        <span>Re-open tutorial</span>
       </button>
     </div>
   )

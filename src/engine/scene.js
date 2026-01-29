@@ -6,10 +6,10 @@ export function createScene(){
   scene.background = new THREE.Color(0x8ae3ff)
   scene.fog = new THREE.Fog(0x8ae3ff, 140, 520)
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75)
+  const ambient = new THREE.AmbientLight(0xffffff, 0.86)
   scene.add(ambient)
 
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9)
+  const sun = new THREE.DirectionalLight(0xffffff, 1.04)
   sun.position.set(90, 140, 70)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048,2048)

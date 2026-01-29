@@ -33,7 +33,7 @@ function createCanvasTexture({ width, height, draw }){
   return texture
 }
 
-export function makeIconSprite({ emoji, size = 2.2, background = "#ff5b5b" }){
+export function makeIconSprite({ label, size = 2.2, background = "#ff5b5b", color = "#fff" }){
   const texture = createCanvasTexture({
     width: 128,
     height: 128,
@@ -42,11 +42,11 @@ export function makeIconSprite({ emoji, size = 2.2, background = "#ff5b5b" }){
       ctx.beginPath()
       ctx.arc(w / 2, h / 2, w / 2 - 6, 0, Math.PI * 2)
       ctx.fill()
-      ctx.fillStyle = "#fff"
+      ctx.fillStyle = color
       ctx.font = "64px Fredoka, sans-serif"
       ctx.textAlign = "center"
       ctx.textBaseline = "middle"
-      ctx.fillText(emoji, w / 2, h / 2 + 6)
+      ctx.fillText(label, w / 2, h / 2 + 6)
     },
   })
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true })

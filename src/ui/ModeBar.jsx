@@ -16,7 +16,7 @@ export default function ModeBar({ mode, onChange }){
           onChange("build")
         }}
       >
-        <span>🧱</span>
+        <span>B</span>
         <small>Build</small>
       </button>
       <button
@@ -27,7 +27,7 @@ export default function ModeBar({ mode, onChange }){
           onChange("camera")
         }}
       >
-        <span>🎥</span>
+        <span>C</span>
         <small>Camera</small>
       </button>
       <button
@@ -38,7 +38,7 @@ export default function ModeBar({ mode, onChange }){
           onChange("move")
         }}
       >
-        <span>✋</span>
+        <span>M</span>
         <small>Move</small>
       </button>
       <button
@@ -49,7 +49,7 @@ export default function ModeBar({ mode, onChange }){
           onChange("demolish")
         }}
       >
-        <span>🗑️</span>
+        <span>D</span>
         <small>Demolish</small>
       </button>
     </div>

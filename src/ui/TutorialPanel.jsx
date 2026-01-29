@@ -8,7 +8,7 @@ const stopUiEvent = (event) => {
 export default function TutorialPanel({ tutorial, onClose }){
   return (
     <div id="tutorialPanel" className="panel guide">
-      <div className="avatar">🐧</div>
+      <div className="avatar">Guide</div>
       <div className="bubble">
         <div style={{ fontWeight: 900, fontFamily: "var(--font-display)" }}>{tutorial.message}</div>
         <div className="checklist">

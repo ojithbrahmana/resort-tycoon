@@ -936,19 +936,25 @@ export default function App(){
         <LevelToast levelUp={levelUp} onDismiss={() => setLevelUp(null)} />
 
         {bankrupt && (
-          <div className="bankruptcy-overlay" onMouseDown={stopUiEvent}>
+          <div
+            className="bankruptcy-overlay"
+            onMouseDown={stopUiEvent}
+            onClick={stopUiEvent}
+          >
             <div className="panel bankruptcy-panel">
-              <h2>Your hotel went bankrupt.</h2>
+              <h2>Oh! Your hotel went bankrupt.</h2>
+              <p>Would you like to start a new game?</p>
               <button
                 className="btn"
                 type="button"
                 onMouseDown={stopUiEvent}
                 onClick={(event) => {
                   stopUiEvent(event)
+                  setBankrupt(false)
                   startNewGame()
                 }}
               >
-                Start New Game
+                Yes
               </button>
             </div>
           </div>
