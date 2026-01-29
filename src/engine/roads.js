@@ -99,12 +99,12 @@ export class RoadSystem {
 
     Object.values(this.meshes).forEach(mesh => {
       mesh.castShadow = false
-      mesh.receiveShadow = true
+      mesh.receiveShadow = false
       this.group.add(mesh)
     })
     Object.values(this.outlines).forEach(mesh => {
       mesh.castShadow = false
-      mesh.receiveShadow = true
+      mesh.receiveShadow = false
       this.group.add(mesh)
     })
 

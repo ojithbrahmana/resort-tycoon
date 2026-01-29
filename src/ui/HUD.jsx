@@ -5,7 +5,7 @@ const stopUiEvent = (event) => {
   event.stopPropagation()
 }
 
-export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan }){
+function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan, perfEnabled, onTogglePerf }){
   const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
   const formattedMoney = `$${money.value.toLocaleString()}`
   const formattedIncome = `Income $${income.value.toLocaleString()}/s`
@@ -48,6 +48,19 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
       >
         ❔ <span>Re-open tutorial</span>
       </button>
+      <button
+        className={`hud-pill ${perfEnabled ? "hud-pill-active" : "hud-pill-muted"}`}
+        type="button"
+        onMouseDown={stopUiEvent}
+        onClick={(event) => {
+          stopUiEvent(event)
+          onTogglePerf?.()
+        }}
+      >
+        🛠 <span>Perf Debug</span>
+      </button>
     </div>
   )
 }
+
+export default React.memo(HUD)
