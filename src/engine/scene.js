@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { ISLAND_RADIUS } from "../game/constants"
+import { GRID_HALF, GRID_SIZE, ISLAND_RADIUS } from "../game/constants"
 
 export function createScene(){
   const scene = new THREE.Scene()
@@ -59,7 +59,8 @@ export function createScene(){
   scene.add(grass)
 
   // subtle grid
-  const grid = new THREE.GridHelper(120, 120/4, 0x0f766e, 0x0f766e)
+  const gridSize = GRID_SIZE * GRID_HALF * 2
+  const grid = new THREE.GridHelper(gridSize, gridSize / GRID_SIZE, 0x0f766e, 0x0f766e)
   grid.position.y = 3.1
   grid.material.opacity = 0.08
   grid.material.transparent = true

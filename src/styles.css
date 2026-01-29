@@ -85,6 +85,20 @@ button {
   z-index: 40;
 }
 
+.hud-logo {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  pointer-events: none;
+  z-index: 40;
+}
+
+.hud-logo img {
+  width: 150px;
+  height: auto;
+  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.18));
+}
+
 .hud-pill {
   display: inline-flex;
   align-items: center;
@@ -97,6 +111,7 @@ button {
   font-size: 14px;
   box-shadow: var(--shadow-inner);
   white-space: nowrap;
+  text-transform: uppercase;
 }
 
 .hud-pill-stack {
@@ -150,6 +165,7 @@ button {
   cursor: pointer;
   border-color: rgba(245, 158, 11, 0.35);
   background: #fef3c7;
+  text-transform: uppercase;
 }
 
 .hud-loan span {
@@ -293,6 +309,7 @@ button {
   gap: 10px;
   overflow-x: auto;
   padding: 0 var(--space-2) var(--space-2) var(--space-2);
+  min-height: 55px;
 }
 
 .chip {
@@ -378,18 +395,18 @@ button {
 }
 
 .thumb {
-  height: 96px;
+  min-height: 110px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(255, 122, 199, 0.2), rgba(91, 140, 255, 0.2));
-  border: var(--border-thin) solid rgba(36, 15, 54, 0.12);
+  background: transparent;
+  border: none;
 }
 
 .thumb-image {
-  width: 72px;
-  height: 72px;
+  width: 100px;
+  height: auto;
   object-fit: contain;
 }
 
