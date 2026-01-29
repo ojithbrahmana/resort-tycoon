@@ -87,14 +87,14 @@ button {
 
 .hud-logo {
   position: fixed;
-  top: var(--space-2);
-  left: var(--space-2);
+  top: -25px;
+  left: -35px;
   pointer-events: none;
   z-index: 40;
 }
 
 .hud-logo img {
-  width: 150px;
+  width: 250px;
   height: auto;
   filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.18));
 }
@@ -123,6 +123,30 @@ button {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+
+.zoom-monitor {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #f8fafc;
+  letter-spacing: 0.02em;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.terrain-detail {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1f2937;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .hud-label {

@@ -101,6 +101,7 @@ export default function App(){
   const [tutorialDismissed, setTutorialDismissed] = useState(false)
   const [buildShopOpen, setBuildShopOpen] = useState(true)
   const [revenueLabels, setRevenueLabels] = useState([])
+  const [zoomState, setZoomState] = useState(null)
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
@@ -635,16 +636,6 @@ export default function App(){
         return "Tile already occupied."
       }
     }
-    if (item?.id === "palm") {
-      for (const building of buildingsRef.current) {
-        if (building.id !== "palm") continue
-        const dx = Math.abs(building.gx - gx)
-        const dz = Math.abs(building.gz - gz)
-        if (Math.max(dx, dz) <= 1) {
-          return "Leave space between palms."
-        }
-      }
-    }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
     }
@@ -953,6 +944,33 @@ export default function App(){
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  useEffect(() => {
+    let raf
+    const updateZoom = () => {
+      const zoom = engineRef.current?.getZoomState?.()
+      if (zoom) {
+        setZoomState(prev => {
+          if (!prev) return zoom
+          if (
+            prev.radius === zoom.radius &&
+            prev.minRadius === zoom.minRadius &&
+            prev.maxRadius === zoom.maxRadius
+          ) {
+            return prev
+          }
+          return zoom
+        })
+      }
+      raf = requestAnimationFrame(updateZoom)
+    }
+    updateZoom()
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const zoomPercent = zoomState
+    ? Math.round(((zoomState.maxRadius - zoomState.radius) / (zoomState.maxRadius - zoomState.minRadius)) * 100)
+    : null
+
   return (
     <>
       <div ref={viewportRef} style={{ position: "fixed", inset: 0 }} />
@@ -967,6 +985,11 @@ export default function App(){
         {showLogo && (
           <div className="hud-logo">
             <img src={logoImage} alt="Resort Tycoon" />
+          </div>
+        )}
+        {zoomState && (
+          <div className="zoom-monitor">
+            Zoom {zoomPercent}% • r {Math.round(zoomState.radius)}
           </div>
         )}
         <HUD

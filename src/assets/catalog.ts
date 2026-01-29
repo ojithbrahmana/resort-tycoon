@@ -17,6 +17,7 @@ export type BuildingCatalogItem = {
   unlockLevel: number
   buildingTier: number
   powerRadius?: number
+  description?: string
 }
 
 export const CATALOG: BuildingCatalogItem[] = [
@@ -34,6 +35,7 @@ export const CATALOG: BuildingCatalogItem[] = [
     iconPath: "/sprites/road.png",
     unlockLevel: 1,
     buildingTier: 0.2,
+    description: "Connects buildings to paths.",
   },
   {
     id: "villa",
@@ -80,6 +82,7 @@ export const CATALOG: BuildingCatalogItem[] = [
     iconPath: "/sprites/palm.png",
     unlockLevel: 1,
     buildingTier: 1,
+    description: "Adds tropical scenery.",
   },
   {
     id: "burgershop",
@@ -106,8 +109,8 @@ export const CATALOG: BuildingCatalogItem[] = [
     requiresPower: true,
     incomePerSec: 5,
     modelPath: "/models/icecream.final.glb",
-    spritePath: "/sprites/villa.png",
-    iconPath: "/sprites/villa.png",
+    spritePath: "/sprites/icecream.png",
+    iconPath: "/sprites/icecream.png",
     unlockLevel: 2,
     buildingTier: 2,
   },
@@ -136,8 +139,8 @@ export const CATALOG: BuildingCatalogItem[] = [
     requiresPower: true,
     incomePerSec: 12,
     modelPath: "/models/pool.final.glb",
-    spritePath: "/sprites/villa.png",
-    iconPath: "/sprites/villa.png",
+    spritePath: "/sprites/pool.png",
+    iconPath: "/sprites/pool.png",
     unlockLevel: 1,
     buildingTier: 3,
   },
@@ -151,8 +154,8 @@ export const CATALOG: BuildingCatalogItem[] = [
     requiresPower: false,
     incomePerSec: 9,
     modelPath: "/models/beachdj.final.glb",
-    spritePath: "/sprites/villa.png",
-    iconPath: "/sprites/villa.png",
+    spritePath: "/sprites/beachdj.png",
+    iconPath: "/sprites/beachdj.png",
     unlockLevel: 2,
     buildingTier: 2,
   },
@@ -195,9 +198,9 @@ export const CATALOG: BuildingCatalogItem[] = [
     requiresRoad: true,
     requiresPower: true,
     incomePerSec: 9,
-    modelPath: "/models/villa.final.glb",
-    spritePath: "/sprites/villa.png",
-    iconPath: "/sprites/villa.png",
+    modelPath: "/models/villa_plus.final.glb",
+    spritePath: "/sprites/villa_plus.png",
+    iconPath: "/sprites/villa_plus.png",
     unlockLevel: 6,
     buildingTier: 2,
   },
