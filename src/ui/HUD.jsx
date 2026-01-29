@@ -5,15 +5,19 @@ const stopUiEvent = (event) => {
   event.stopPropagation()
 }
 
-export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan }){
+function HUD({ money, income, incomeTrend, level, xp, xpToNext, onReopenTutorial, onOpenLoan, perfEnabled, onTogglePerf }){
   const xpPct = Math.min(100, Math.round((xp / xpToNext) * 100))
+  const formattedMoney = `$${money.value.toLocaleString()}`
+  const formattedIncome = `Income $${income.value.toLocaleString()}/s`
   return (
     <div id="hud" className="hud" onMouseDown={stopUiEvent}>
-      <div className={`hud-pill ${money.bump ? "bump" : ""}`}>
-        🪙 ${money.value}
+      <div className={`hud-pill hud-pill-stack ${money.bump ? "bump" : ""}`}>
+        <div className="hud-label">💰 Bank Balance</div>
+        <div className="hud-value">{formattedMoney}</div>
       </div>
-      <div className={`hud-pill ${incomeTrend === "up" ? "bump" : incomeTrend === "down" ? "shake" : ""}`}>
-        ${income.value}
+      <div className={`hud-pill hud-pill-stack ${incomeTrend === "up" ? "bump" : incomeTrend === "down" ? "shake" : ""}`}>
+        <div className="hud-label">📈 Income</div>
+        <div className="hud-value">{formattedIncome}</div>
         {income.deltaText && (
           <span className={`income-pill ${incomeTrend === "down" ? "negative" : ""}`}>
             {income.deltaText}
@@ -44,6 +48,19 @@ export default function HUD({ money, income, incomeTrend, level, xp, xpToNext, o
       >
         ❔ <span>Re-open tutorial</span>
       </button>
+      <button
+        className={`hud-pill ${perfEnabled ? "hud-pill-active" : "hud-pill-muted"}`}
+        type="button"
+        onMouseDown={stopUiEvent}
+        onClick={(event) => {
+          stopUiEvent(event)
+          onTogglePerf?.()
+        }}
+      >
+        🛠 <span>Perf Debug</span>
+      </button>
     </div>
   )
 }
+
+export default React.memo(HUD)

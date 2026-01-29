@@ -6,13 +6,13 @@ export function createScene(){
   scene.background = new THREE.Color(0x8ae3ff)
   scene.fog = new THREE.Fog(0x8ae3ff, 140, 520)
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75)
+  const ambient = new THREE.AmbientLight(0xffffff, 0.86)
   scene.add(ambient)
 
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9)
+  const sun = new THREE.DirectionalLight(0xffffff, 1.04)
   sun.position.set(90, 140, 70)
   sun.castShadow = true
-  sun.shadow.mapSize.set(2048,2048)
+  sun.shadow.mapSize.set(1024, 1024)
   sun.shadow.camera.near = 10
   sun.shadow.camera.far = 400
   scene.add(sun)
@@ -65,7 +65,7 @@ export function createScene(){
   for (let i = 0; i < 6; i += 1) {
     const rock = new THREE.Mesh(rockGeo, rockMat)
     rock.position.set(20 + i * 4, 4, -18 + i * 3)
-    rock.castShadow = true
+    rock.castShadow = false
     props.add(rock)
   }
 
@@ -74,8 +74,8 @@ export function createScene(){
     const leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 6), palmMat)
     trunk.position.set(-18 + i * 6, 6, 18 - i * 4)
     leaves.position.set(trunk.position.x, 9, trunk.position.z)
-    trunk.castShadow = true
-    leaves.castShadow = true
+    trunk.castShadow = false
+    leaves.castShadow = false
     props.add(trunk)
     props.add(leaves)
   }

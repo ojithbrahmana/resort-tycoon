@@ -1,5 +1,7 @@
 import * as THREE from "three"
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js"
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
 import { createScene } from "./scene.js"
 import { createCamera, attachCameraControls } from "./camera.js"
 import { worldToGrid, gridToWorld, key } from "./grid.js"
@@ -12,6 +14,75 @@ import { findPath } from "../game/guests"
 
 const skeletonClone = SkeletonUtils.clone || SkeletonUtils.SkeletonUtils?.clone
 const npcClone = skeletonClone || ((source) => source.clone(true))
+const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.url).toString()
+const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
+const sharedDracoLoader = new DRACOLoader()
+sharedDracoLoader.setDecoderPath(DRACO_DECODER_URL)
+const sharedGltfLoader = new GLTFLoader()
+sharedGltfLoader.setDRACOLoader(sharedDracoLoader)
+
+async function addPalmBorder({ scene }) {
+  const gltf = await sharedGltfLoader.loadAsync(PALM_MODEL_URL).catch((error) => {
+    console.error(`Failed to load palm model for border palms from ${PALM_MODEL_URL}.`, error)
+    return null
+  })
+  if (!gltf?.scene) return
+
+  const meshes = []
+  gltf.scene.traverse((child) => {
+    if (child.isMesh) {
+      meshes.push(child)
+    }
+  })
+  if (!meshes.length) return
+
+  const bounds = new THREE.Box3().setFromObject(gltf.scene)
+  const size = new THREE.Vector3()
+  bounds.getSize(size)
+  const footprint = Math.max(size.x, size.z) || 1
+  const targetFootprint = GRID_SIZE * 2
+  const baseScale = targetFootprint / footprint
+
+  const placements = []
+  const baseRadius = ISLAND_RADIUS + 4
+  const minRadius = ISLAND_RADIUS - 1
+  const maxRadius = ISLAND_RADIUS + 10
+  let angle = Math.random() * Math.PI * 2
+  const endAngle = angle + Math.PI * 2
+  while (angle < endAngle) {
+    const radiusJitter = (Math.random() - 0.5) * 6
+    const radius = Math.min(maxRadius, Math.max(minRadius, baseRadius + radiusJitter))
+    const x = Math.cos(angle) * radius
+    const z = Math.sin(angle) * radius
+    placements.push({
+      x,
+      z,
+      rotation: Math.random() * Math.PI * 2,
+      scale: baseScale * (0.85 + Math.random() * 0.3),
+    })
+    const spacing = 5 + Math.random() * 4
+    angle += spacing / radius
+  }
+
+  const group = new THREE.Group()
+  group.name = "palm-border"
+  meshes.forEach((mesh) => {
+    const instanced = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length)
+    instanced.castShadow = false
+    instanced.receiveShadow = false
+    const matrix = new THREE.Matrix4()
+    placements.forEach((placement, index) => {
+      matrix.compose(
+        new THREE.Vector3(placement.x, 3.05, placement.z),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, placement.rotation, 0)),
+        new THREE.Vector3(placement.scale, placement.scale, placement.scale)
+      )
+      instanced.setMatrixAt(index, matrix)
+    })
+    group.add(instanced)
+  })
+  scene.add(group)
+}
 
 export function createEngine({ container }){
   preloadBuildingModels()
@@ -26,9 +97,36 @@ export function createEngine({ container }){
   container.appendChild(renderer.domElement)
 
   const { scene, island } = createScene()
+  void addPalmBorder({ scene })
   const camera = createCamera(width,height)
   const controls = attachCameraControls({ dom: renderer.domElement, camera })
   controls.setEnabled?.(false)
+
+  const perfState = {
+    enabled: false,
+    element: null,
+    frames: 0,
+    lastSample: performance.now(),
+    fps: 0,
+  }
+
+  function ensurePerfPanel() {
+    if (perfState.element) return perfState.element
+    const panel = document.createElement("div")
+    panel.className = "perf-debug-panel"
+    panel.style.display = "none"
+    container.appendChild(panel)
+    perfState.element = panel
+    return panel
+  }
+
+  function setPerfDebug(enabled) {
+    perfState.enabled = Boolean(enabled)
+    const panel = ensurePerfPanel()
+    panel.style.display = perfState.enabled ? "block" : "none"
+    perfState.frames = 0
+    perfState.lastSample = performance.now()
+  }
 
   const raycaster = new THREE.Raycaster()
   const mouse = new THREE.Vector2()
@@ -675,6 +773,18 @@ export function createEngine({ container }){
     const now = performance.now()
     const delta = Math.min(0.05, (now - lastTime) / 1000)
     lastTime = now
+    if (perfState.enabled) {
+      perfState.frames += 1
+      const elapsed = now - perfState.lastSample
+      if (elapsed >= 250) {
+        perfState.fps = Math.round((perfState.frames / elapsed) * 1000)
+        perfState.frames = 0
+        perfState.lastSample = now
+        const panel = ensurePerfPanel()
+        const info = renderer.info
+        panel.textContent = `FPS ${perfState.fps} | Draws ${info.render.calls} | Tris ${info.render.triangles}`
+      }
+    }
     controls.update?.()
     if (shakeTime > 0) {
       shakeTime -= delta
@@ -729,5 +839,6 @@ export function createEngine({ container }){
     shakeCamera,
     getGuestCount: () => npcs.length,
     resetWorld,
+    setPerfDebug,
   }
 }

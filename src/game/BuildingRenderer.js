@@ -10,7 +10,12 @@ const PALM_MODEL_URL = new URL("../assets/models/palm.final.glb", import.meta.ur
 const SPA_MODEL_URL = new URL("../assets/models/spa.final.glb", import.meta.url).toString()
 const POOL_MODEL_URL = new URL("../assets/models/pool.final.glb", import.meta.url).toString()
 const BEACH_DJ_MODEL_URL = new URL("../assets/models/beachdj.final.glb", import.meta.url).toString()
+const BURGER_SHOP_MODEL_URL = new URL("../assets/models/burgershop.final.glb", import.meta.url).toString()
 const DRACO_DECODER_URL = "https://www.gstatic.com/draco/v1/decoders/"
+const sharedDracoLoader = new DRACOLoader()
+sharedDracoLoader.setDecoderPath(DRACO_DECODER_URL)
+const sharedGltfLoader = new GLTFLoader()
+sharedGltfLoader.setDRACOLoader(sharedDracoLoader)
 let villaModel = null
 let villaModelPromise = null
 let villaScaleFactor = 1
@@ -29,6 +34,9 @@ let poolScaleFactor = 1
 let beachDjModel = null
 let beachDjModelPromise = null
 let beachDjScaleFactor = 1
+let burgerShopModel = null
+let burgerShopModelPromise = null
+let burgerShopScaleFactor = 1
 const MODEL_BRIGHTNESS_FACTOR = 1.35
 
 function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
@@ -51,13 +59,7 @@ function applyModelBrightness(object, factor = MODEL_BRIGHTNESS_FACTOR) {
 
 function loadVillaModel() {
   if (villaModelPromise) return villaModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  villaModelPromise = loader.loadAsync(VILLA_MODEL_URL).then((gltf) => {
+  villaModelPromise = sharedGltfLoader.loadAsync(VILLA_MODEL_URL).then((gltf) => {
     villaModel = gltf.scene
     villaModel.traverse((child) => {
       if (child.isMesh) {
@@ -65,6 +67,7 @@ function loadVillaModel() {
         child.receiveShadow = true
       }
     })
+    applyModelBrightness(villaModel)
     villaModel.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(villaModel)
     const size = new THREE.Vector3()
@@ -86,6 +89,7 @@ export function preloadBuildingModels() {
     loadSpaModel(),
     loadPoolModel(),
     loadBeachDjModel(),
+    loadBurgerShopModel(),
   ])
 }
 
@@ -153,19 +157,12 @@ async function createVillaModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.6))
   group.add(clone)
-  applyModelBrightness(group)
   return group
 }
 
 function loadIceCreamModel() {
   if (iceCreamModelPromise) return iceCreamModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  iceCreamModelPromise = loader.loadAsync(ICECREAM_MODEL_URL).then((gltf) => {
+  iceCreamModelPromise = sharedGltfLoader.loadAsync(ICECREAM_MODEL_URL).then((gltf) => {
     iceCreamModel = gltf.scene
     iceCreamModel.traverse((child) => {
       if (child.isMesh) {
@@ -173,6 +170,7 @@ function loadIceCreamModel() {
         child.receiveShadow = true
       }
     })
+    applyModelBrightness(iceCreamModel)
     iceCreamModel.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(iceCreamModel)
     const size = new THREE.Vector3()
@@ -200,7 +198,6 @@ async function createIceCreamModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(2.2))
   group.add(clone)
-  applyModelBrightness(group)
   return group
 }
 
@@ -241,20 +238,15 @@ function createGeneratorMesh() {
 
 function loadPalmModel() {
   if (palmModelPromise) return palmModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  palmModelPromise = loader.loadAsync(PALM_MODEL_URL).then((gltf) => {
+  palmModelPromise = sharedGltfLoader.loadAsync(PALM_MODEL_URL).then((gltf) => {
     palmModel = gltf.scene
     palmModel.traverse((child) => {
       if (child.isMesh) {
-        child.castShadow = true
-        child.receiveShadow = true
+        child.castShadow = false
+        child.receiveShadow = false
       }
     })
+    applyModelBrightness(palmModel)
     palmModel.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(palmModel)
     const size = new THREE.Vector3()
@@ -282,19 +274,12 @@ async function createPalmModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.1))
   group.add(clone)
-  applyModelBrightness(group)
   return group
 }
 
 function loadSpaModel() {
   if (spaModelPromise) return spaModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  spaModelPromise = loader.loadAsync(SPA_MODEL_URL).then((gltf) => {
+  spaModelPromise = sharedGltfLoader.loadAsync(SPA_MODEL_URL).then((gltf) => {
     spaModel = gltf.scene
     spaModel.traverse((child) => {
       if (child.isMesh) {
@@ -302,6 +287,7 @@ function loadSpaModel() {
         child.receiveShadow = true
       }
     })
+    applyModelBrightness(spaModel)
     spaModel.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(spaModel)
     const size = new THREE.Vector3()
@@ -329,19 +315,12 @@ async function createSpaModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(2.8))
   group.add(clone)
-  applyModelBrightness(group)
   return group
 }
 
 function loadPoolModel() {
   if (poolModelPromise) return poolModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  poolModelPromise = loader.loadAsync(POOL_MODEL_URL).then((gltf) => {
+  poolModelPromise = sharedGltfLoader.loadAsync(POOL_MODEL_URL).then((gltf) => {
     poolModel = gltf.scene
     poolModel.traverse((child) => {
       if (child.isMesh) {
@@ -349,6 +328,7 @@ function loadPoolModel() {
         child.receiveShadow = true
       }
     })
+    applyModelBrightness(poolModel)
     poolModel.updateMatrixWorld(true)
     const bounds = new THREE.Box3().setFromObject(poolModel)
     const size = new THREE.Vector3()
@@ -376,35 +356,34 @@ async function createPoolModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(2.8))
   group.add(clone)
-  applyModelBrightness(group)
   return group
 }
 
 function loadBeachDjModel() {
   if (beachDjModelPromise) return beachDjModelPromise
-
-  const loader = new GLTFLoader()
-  const dracoLoader = new DRACOLoader()
-  dracoLoader.setDecoderPath(DRACO_DECODER_URL)
-  loader.setDRACOLoader(dracoLoader)
-
-  beachDjModelPromise = loader.loadAsync(BEACH_DJ_MODEL_URL).then((gltf) => {
-    beachDjModel = gltf.scene
-    beachDjModel.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-      }
+  beachDjModelPromise = sharedGltfLoader.loadAsync(BEACH_DJ_MODEL_URL)
+    .then((gltf) => {
+      beachDjModel = gltf.scene
+      beachDjModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      })
+      applyModelBrightness(beachDjModel)
+      beachDjModel.updateMatrixWorld(true)
+      const bounds = new THREE.Box3().setFromObject(beachDjModel)
+      const size = new THREE.Vector3()
+      bounds.getSize(size)
+      const footprint = Math.max(size.x, size.z) || 1
+      const targetFootprint = GRID_SIZE * 2
+      beachDjScaleFactor = targetFootprint / footprint
+      return beachDjModel
     })
-    beachDjModel.updateMatrixWorld(true)
-    const bounds = new THREE.Box3().setFromObject(beachDjModel)
-    const size = new THREE.Vector3()
-    bounds.getSize(size)
-    const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 2
-    beachDjScaleFactor = targetFootprint / footprint
-    return beachDjModel
-  })
+    .catch((error) => {
+      console.error(`Failed to load Beach DJ model from ${BEACH_DJ_MODEL_URL}.`, error)
+      return null
+    })
 
   return beachDjModelPromise
 }
@@ -423,7 +402,52 @@ async function createBeachDjModel() {
   const group = new THREE.Group()
   group.add(createContactShadow(1.4))
   group.add(clone)
-  applyModelBrightness(group)
+  return group
+}
+
+function loadBurgerShopModel() {
+  if (burgerShopModelPromise) return burgerShopModelPromise
+  burgerShopModelPromise = sharedGltfLoader.loadAsync(BURGER_SHOP_MODEL_URL)
+    .then((gltf) => {
+      burgerShopModel = gltf.scene
+      burgerShopModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      })
+      applyModelBrightness(burgerShopModel)
+      burgerShopModel.updateMatrixWorld(true)
+      const bounds = new THREE.Box3().setFromObject(burgerShopModel)
+      const size = new THREE.Vector3()
+      bounds.getSize(size)
+      const footprint = Math.max(size.x, size.z) || 1
+      const targetFootprint = GRID_SIZE * 2
+      burgerShopScaleFactor = targetFootprint / footprint
+      return burgerShopModel
+    })
+    .catch((error) => {
+      console.error(`Failed to load Burger Shop model from ${BURGER_SHOP_MODEL_URL}.`, error)
+      return null
+    })
+
+  return burgerShopModelPromise
+}
+
+async function createBurgerShopModel() {
+  const model = await loadBurgerShopModel()
+  if (!model) {
+    return null
+  }
+  const clone = model.clone(true)
+  clone.scale.setScalar(burgerShopScaleFactor)
+  clone.updateMatrixWorld(true)
+  const scaledBounds = new THREE.Box3().setFromObject(clone)
+  const yOffset = -scaledBounds.min.y
+  clone.position.y += yOffset + 0.05
+  const group = new THREE.Group()
+  group.add(createContactShadow(1.6))
+  group.add(clone)
   return group
 }
 
@@ -454,6 +478,13 @@ export async function createBuildingObject({ building, spritePath, size = 3.6 })
   if (building?.id === "beach_dj") {
     const object = await createBeachDjModel()
     return { object, isModel: true }
+  }
+  if (building?.id === "burgershop") {
+    const object = await createBurgerShopModel()
+    if (object) {
+      return { object, isModel: true }
+    }
+    return { object: makeBillboardSprite(spritePath, size), isModel: false }
   }
 
   return { object: makeBillboardSprite(spritePath, size), isModel: false }

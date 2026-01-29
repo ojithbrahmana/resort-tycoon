@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three"
 import { createEngine } from "../engine/engine.js"
 import { gridToWorld, key, worldToGrid } from "../engine/grid.js"
@@ -78,6 +78,7 @@ export default function App(){
   const [loanPanelOpen, setLoanPanelOpen] = useState(false)
   const [activeLoan, setActiveLoan] = useState(null)
   const [bankrupt, setBankrupt] = useState(false)
+  const [perfDebugEnabled, setPerfDebugEnabled] = useState(Boolean(import.meta.env?.DEV))
   const earningOnceRef = useRef(new Set())
   const lastIncomeRef = useRef(0)
   const splashRef = useRef("show")
@@ -170,6 +171,7 @@ export default function App(){
     if (!viewportRef.current) return
     const eng = createEngine({ container: viewportRef.current })
     engineRef.current = eng
+    eng.setPerfDebug(perfDebugEnabled)
 
     eng.setHandlers({
       onPlaceCb: ({ gx, gz }) => {
@@ -260,6 +262,10 @@ export default function App(){
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewportRef])
+
+  useEffect(() => {
+    engineRef.current?.setPerfDebug(perfDebugEnabled)
+  }, [perfDebugEnabled])
 
   useEffect(() => {
     engineRef.current?.setInputLocked(splashPhase !== "done" || bankrupt)
@@ -727,8 +733,26 @@ export default function App(){
     }
   }
 
-  const moneyDisplayState = { value: moneyDisplay.toLocaleString(), bump: moneyBump }
-  const incomeDisplayState = { value: economy.total, deltaText: incomeDeltaText }
+  const moneyDisplayState = useMemo(() => ({
+    value: moneyDisplay.toLocaleString(),
+    bump: moneyBump,
+  }), [moneyDisplay, moneyBump])
+  const incomeDisplayState = useMemo(() => ({
+    value: economy.total,
+    deltaText: incomeDeltaText,
+  }), [economy.total, incomeDeltaText])
+
+  const handleReopenTutorial = useCallback(() => {
+    if (!tutorialDismissed) setTutorialVisible(true)
+  }, [tutorialDismissed])
+
+  const handleOpenLoan = useCallback(() => {
+    if (!bankrupt) setLoanPanelOpen(true)
+  }, [bankrupt])
+
+  const handleTogglePerf = useCallback(() => {
+    setPerfDebugEnabled(prev => !prev)
+  }, [])
 
   const splashVisible = splashPhase !== "done"
 
@@ -827,12 +851,10 @@ export default function App(){
           level={progression.level}
           xp={progression.xp}
           xpToNext={progression.xpToNext}
-          onReopenTutorial={() => {
-            if (!tutorialDismissed) setTutorialVisible(true)
-          }}
-          onOpenLoan={() => {
-            if (!bankrupt) setLoanPanelOpen(true)
-          }}
+          onReopenTutorial={handleReopenTutorial}
+          onOpenLoan={handleOpenLoan}
+          perfEnabled={perfDebugEnabled}
+          onTogglePerf={handleTogglePerf}
         />
 
         <ModeBar mode={mode} onChange={setModeSafe} />
@@ -936,19 +958,25 @@ export default function App(){
         <LevelToast levelUp={levelUp} onDismiss={() => setLevelUp(null)} />
 
         {bankrupt && (
-          <div className="bankruptcy-overlay" onMouseDown={stopUiEvent}>
+          <div
+            className="bankruptcy-overlay"
+            onMouseDown={stopUiEvent}
+            onClick={stopUiEvent}
+          >
             <div className="panel bankruptcy-panel">
-              <h2>Your hotel went bankrupt.</h2>
+              <h2>Oh! Your hotel went bankrupt.</h2>
+              <p>Would you like to start a new game?</p>
               <button
                 className="btn"
                 type="button"
                 onMouseDown={stopUiEvent}
                 onClick={(event) => {
                   stopUiEvent(event)
+                  setBankrupt(false)
                   startNewGame()
                 }}
               >
-                Start New Game
+                Yes
               </button>
             </div>
           </div>
