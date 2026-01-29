@@ -7,7 +7,7 @@ const stopUiEvent = (event) => {
 
 function HUD({ money, income, incomeTrend, expenses, guests, happiness, level, onOpenLoan }){
   const formattedMoney = `$${money.value.toLocaleString()}`
-  const formattedIncome = `Income $${income.value.toLocaleString()}/s`
+  const formattedIncome = `+$${income.value.toLocaleString()}/s`
   const formattedExpenses = `-$${expenses.toLocaleString()}/s`
   const happinessBlocks = (() => {
     const totalBlocks = 10
