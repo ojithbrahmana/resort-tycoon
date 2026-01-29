@@ -89,21 +89,21 @@ export function computeHappiness({
   const utilityCount = buildings.filter(b => catalogById[b.id]?.category === "Utility").length
   const buildingCount = buildings.filter(b => b.id !== "road").length
 
-  let score = 50
-  score += attractionCount * 4
-  score += Math.min(12, roadCount * 0.4)
-  score += Math.min(10, palmCount * 1)
-  score += Math.min(10, decorCount * 0.6)
+  let score = 0
+  score += attractionCount * 5
+  score += Math.min(20, roadCount * 0.8)
+  score += Math.min(15, palmCount * 1.2)
+  score += Math.min(18, decorCount * 0.8)
 
-  score -= generatorCount * 3
+  score -= generatorCount * 2
   if (buildingCount > 18) {
-    score -= Math.min(12, (buildingCount - 18) * 0.6)
+    score -= Math.min(10, (buildingCount - 18) * 0.5)
   }
-  if (attractionCount === 0) score -= 15
+  if (attractionCount === 0) score -= 10
   if (roadCount === 0) score -= 10
-  if (utilityCount === 0) score -= 8
-  if (money < 0) score -= 8
-  if (hasLoan) score -= 6
+  if (utilityCount === 0) score -= 6
+  if (money < 0) score -= 6
+  if (hasLoan) score -= 4
 
   return Math.max(0, Math.min(100, Math.round(score)))
 }
@@ -148,16 +148,16 @@ export function computeEconomy({
   const beachClubCount = buildings.filter(b => b.id === "beachclub").length
   const utilityCount = buildings.filter(b => catalogById[b.id]?.category === "Utility" && b.id !== "generator").length
 
-  const baseMaintenance = 8
-  const buildingMaintenance = buildingCount * 1.1
-  const generatorUpkeep = generatorCount * 2.4
-  const guestServices = guests * 0.08
-  const djOperation = beachDjCount * 2.8
-  const utilitiesCost = utilityCount * 0.9
-  const spaCost = spaCount * 3.2
-  const beachClubCost = beachClubCount * 4.1
-  const levelScale = 1 + level * 0.04
-  const expenses = Math.max(
+  const baseMaintenance = 4
+  const buildingMaintenance = buildingCount * 0.45
+  const generatorUpkeep = generatorCount * 1.2
+  const guestServices = guests * 0.04
+  const djOperation = beachDjCount * 1.4
+  const utilitiesCost = utilityCount * 0.5
+  const spaCost = spaCount * 1.6
+  const beachClubCost = beachClubCount * 2.0
+  const levelScale = 1 + level * 0.02
+  const rawExpenses = Math.max(
     0,
     Math.round(
       (baseMaintenance +
@@ -171,6 +171,7 @@ export function computeEconomy({
         levelScale
     )
   )
+  const expenses = income > 0 ? Math.min(rawExpenses, Math.round(income * 0.6)) : 0
 
   const total = income - expenses
 

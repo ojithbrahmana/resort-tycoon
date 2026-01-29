@@ -10,9 +10,9 @@ export function createCamera(width,height){
 export function attachCameraControls({ dom, camera }){
   // lightweight orbit + pan + zoom
   const MIN_ZOOM_PERCENT = 60
-  const MAX_ZOOM_PERCENT = 100
+  const MAX_ZOOM_PERCENT = 150
   const DEFAULT_ZOOM_PERCENT = 70
-  const MIN_RADIUS = 85
+  const MIN_RADIUS = 55
   const MAX_RADIUS = 165
   let isRot=false, isPan=false
   let pointerDown=false

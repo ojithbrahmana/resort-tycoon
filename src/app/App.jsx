@@ -79,8 +79,6 @@ export default function App(){
   const dragRef = useRef({ active: false, start: null, axis: null, placed: new Set() })
   const moveSelectionRef = useRef(null)
   const activeLoanRef = useRef(null)
-  const negativeTimerRef = useRef(0)
-  const debtTimerRef = useRef(0)
   const builtInSeedRef = useRef(false)
 
   const [mode, setMode] = useState("build")
@@ -458,19 +456,7 @@ export default function App(){
   useEffect(() => {
     const timer = setInterval(() => {
       if (bankrupt) return
-      const income = economyRef.current.income
-      const payment = activeLoanRef.current?.paymentPerSecond ?? 0
-      if (moneyRef.current < 0) {
-        negativeTimerRef.current += 0.25
-      } else {
-        negativeTimerRef.current = 0
-      }
-      if (payment > income * 0.75 && payment > 0) {
-        debtTimerRef.current += 0.25
-      } else {
-        debtTimerRef.current = 0
-      }
-      if (negativeTimerRef.current >= 3 || debtTimerRef.current >= 5) {
+      if (moneyRef.current <= -1000) {
         setBankrupt(true)
         setBuildShopOpen(false)
         setLoanPanelOpen(false)
@@ -590,8 +576,6 @@ export default function App(){
     setHasBuiltGenerator(false)
     setActiveLoan(null)
     activeLoanRef.current = null
-    negativeTimerRef.current = 0
-    debtTimerRef.current = 0
     setTutorialDismissed(false)
     setTutorialVisible(true)
     setModeSafe("build")
@@ -704,7 +688,6 @@ export default function App(){
       setBuildings(prev => prev.map(b => b.uid === uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
     })
 
-    pop(`${item.name} placed.`)
     return { placed: true, reason: null }
   }
 
@@ -991,7 +974,7 @@ export default function App(){
   }, [])
 
   const zoomPercent = zoomState
-    ? Math.round(60 + ((zoomState.maxRadius - zoomState.radius) / (zoomState.maxRadius - zoomState.minRadius)) * 40)
+    ? Math.round(60 + ((zoomState.maxRadius - zoomState.radius) / (zoomState.maxRadius - zoomState.minRadius)) * 90)
     : null
 
   return (

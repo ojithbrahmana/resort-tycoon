@@ -126,6 +126,25 @@ button {
   color: #b91c1c;
 }
 
+.hud-happiness-bar {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.hud-happiness-block {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(226, 232, 240, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.6);
+}
+
+.hud-happiness-block.filled {
+  background: #FFD447;
+  border-color: rgba(202, 138, 4, 0.6);
+}
+
 .hud-pill-stack {
   flex-direction: column;
   align-items: flex-start;

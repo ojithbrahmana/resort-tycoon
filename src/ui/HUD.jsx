@@ -12,7 +12,7 @@ function HUD({ money, income, incomeTrend, expenses, guests, happiness, level, o
   const happinessBlocks = (() => {
     const totalBlocks = 10
     const filled = Math.max(0, Math.min(totalBlocks, Math.round((happiness / 100) * totalBlocks)))
-    return `${"█".repeat(filled)}${"░".repeat(totalBlocks - filled)} ${happiness}%`
+    return Array.from({ length: totalBlocks }, (_, index) => index < filled)
   })()
   return (
     <div id="hud" className="hud" onMouseDown={stopUiEvent}>
@@ -39,7 +39,14 @@ function HUD({ money, income, incomeTrend, expenses, guests, happiness, level, o
       </div>
       <div className="hud-pill hud-pill-stack">
         <div className="hud-label">😊 Happiness</div>
-        <div className="hud-value">{happinessBlocks}</div>
+        <div className="hud-value hud-happiness-bar" aria-label={`Happiness ${happiness} out of 100`}>
+          {happinessBlocks.map((filled, index) => (
+            <span
+              key={`happy-${index}`}
+              className={`hud-happiness-block ${filled ? "filled" : ""}`}
+            />
+          ))}
+        </div>
       </div>
       <div className="hud-pill">LEVEL ⭐{level}</div>
       <button
