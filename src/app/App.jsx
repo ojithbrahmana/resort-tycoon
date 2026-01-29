@@ -27,15 +27,6 @@ const LOAN_OPTIONS = [
 ]
 const LOAN_DURATION_SEC = 60
 const BUILT_IN_PALM_COUNT = 14
-const BUILT_IN_RECEPTION = { gx: -2, gz: -2 }
-const BUILT_IN_RECEPTION_ROADS = [
-  { gx: -2, gz: 2 },
-  { gx: -1, gz: 2 },
-  { gx: 0, gz: 2 },
-  { gx: 1, gz: 2 },
-  { gx: 2, gz: 1 },
-  { gx: 2, gz: 0 },
-]
 const COST_INCREASE_STEP = 50
 const COST_INCREASE_CAP = 200
 const PLACEMENT_BUBBLE_MS = 2500
@@ -98,7 +89,6 @@ export default function App(){
   const moveSelectionRef = useRef(null)
   const activeLoanRef = useRef(null)
   const builtInSeedRef = useRef(false)
-  const builtInReceptionRef = useRef(false)
   const bubblePlacementTimeoutRef = useRef(null)
 
   const [mode, setMode] = useState("build")
@@ -207,6 +197,7 @@ export default function App(){
 
   const getItemCostForCount = useCallback((item, count) => {
     if (!item || item.cost === 0) return 0
+    if (item.id === "road" || item.id === "palm") return item.cost
     return item.cost + getCostIncreaseByCount(count)
   }, [])
 
@@ -400,7 +391,6 @@ export default function App(){
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mousedown", onMouseDown)
     window.addEventListener("mouseup", onMouseUp)
-    seedBuiltInReception({ replace: true })
     seedBuiltInPalms({ replace: false })
     return () => {
       window.removeEventListener("mousemove", onMove)
@@ -664,66 +654,6 @@ export default function App(){
     })
   }
 
-  function seedBuiltInReception({ replace = false } = {}){
-    if (builtInReceptionRef.current) return
-    const receptionItem = catalogById.reception
-    const roadItem = catalogById.road
-    if (!receptionItem || !roadItem) return
-    const occupied = replace ? new Set() : new Set(occupiedRef.current)
-    const entries = []
-    const receptionEntry = {
-      uid: createUid("reception"),
-      id: "reception",
-      gx: BUILT_IN_RECEPTION.gx,
-      gz: BUILT_IN_RECEPTION.gz,
-      cost: 0,
-      object: null,
-      builtIn: true,
-    }
-    entries.push(receptionEntry)
-    const receptionCells = getFootprintCells({ gx: receptionEntry.gx, gz: receptionEntry.gz }, receptionItem.footprint)
-    receptionCells.forEach(cell => occupied.add(key(cell.gx, cell.gz)))
-    BUILT_IN_RECEPTION_ROADS.forEach(cell => {
-      const cellKey = key(cell.gx, cell.gz)
-      if (occupied.has(cellKey)) return
-      occupied.add(cellKey)
-      entries.push({
-        uid: createUid("road"),
-        id: "road",
-        gx: cell.gx,
-        gz: cell.gz,
-        cost: 0,
-        object: null,
-        builtIn: true,
-      })
-    })
-    occupiedRef.current = occupied
-    builtInReceptionRef.current = true
-    const nextBuildings = replace ? entries : [...buildingsRef.current, ...entries]
-    buildingsRef.current = nextBuildings
-    setBuildings(nextBuildings)
-    entries.forEach(entry => {
-      const item = entry.id === "road" ? roadItem : receptionItem
-      void engineRef.current?.addBuilding({ building: item, gx: entry.gx, gz: entry.gz, uid: entry.uid }).then(obj => {
-        if (obj?.type === "road") {
-          setBuildings(prev => prev.map(b => b.uid === entry.uid ? { ...b, object: obj } : b))
-          return
-        }
-        let bboxTopY = null
-        let bboxHeight = null
-        let bboxBottomY = null
-        if (obj) {
-          const bounds = new THREE.Box3().setFromObject(obj)
-          bboxTopY = bounds.max.y
-          bboxHeight = bounds.max.y - bounds.min.y
-          bboxBottomY = bounds.min.y
-          obj.userData = { ...obj.userData, bboxTopY, bboxHeight, bboxBottomY }
-        }
-        setBuildings(prev => prev.map(b => b.uid === entry.uid ? { ...b, object: obj, bboxTopY, bboxHeight, bboxBottomY } : b))
-      })
-    })
-  }
-
   function startNewGame(){
     engineRef.current?.resetWorld?.()
     engineRef.current?.setInputLocked(false)
@@ -763,8 +693,6 @@ export default function App(){
     lastIncomeRef.current = 0
     clearMoveSelection()
     builtInSeedRef.current = false
-    builtInReceptionRef.current = false
-    seedBuiltInReception({ replace: true })
     seedBuiltInPalms({ replace: false })
   }
 
@@ -818,6 +746,12 @@ export default function App(){
     }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
+    }
+    if (item.id === "reception") {
+      const existingReception = buildingsRef.current.some(building => building.id === "reception")
+      if (existingReception) {
+        return "Only one Reception is allowed."
+      }
     }
     const itemCost = getPlacementCost(item)
     if (moneyRef.current < itemCost) {
@@ -1039,8 +973,8 @@ export default function App(){
 
   const handleOpenLoan = useCallback(() => {
     if (bankrupt) return
+    setModeSafe("camera")
     setLoanPanelOpen(true)
-    setBuildShopOpen(false)
   }, [bankrupt])
 
   const splashVisible = splashPhase !== "done"

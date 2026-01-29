@@ -508,7 +508,7 @@ button {
   min-width: 150px;
 }
 
-.card:hover .info-tooltip,
+.info-icon:hover + .info-tooltip,
 .info-tooltip.show {
   opacity: 1;
   transform: translateY(0);
