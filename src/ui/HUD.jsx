@@ -5,9 +5,15 @@ const stopUiEvent = (event) => {
   event.stopPropagation()
 }
 
-function HUD({ money, income, incomeTrend, level, onOpenLoan }){
+function HUD({ money, income, incomeTrend, expenses, guests, happiness, level, onOpenLoan }){
   const formattedMoney = `$${money.value.toLocaleString()}`
   const formattedIncome = `Income $${income.value.toLocaleString()}/s`
+  const formattedExpenses = `-$${expenses.toLocaleString()}/s`
+  const happinessBlocks = (() => {
+    const totalBlocks = 10
+    const filled = Math.max(0, Math.min(totalBlocks, Math.round((happiness / 100) * totalBlocks)))
+    return `${"█".repeat(filled)}${"░".repeat(totalBlocks - filled)} ${happiness}%`
+  })()
   return (
     <div id="hud" className="hud" onMouseDown={stopUiEvent}>
       <div className={`hud-pill hud-pill-stack hud-pill-primary ${money.bump ? "bump" : ""}`}>
@@ -22,6 +28,18 @@ function HUD({ money, income, incomeTrend, level, onOpenLoan }){
             {income.deltaText}
           </span>
         )}
+      </div>
+      <div className="hud-pill hud-pill-stack hud-pill-expense">
+        <div className="hud-label">💸 Expenses</div>
+        <div className="hud-value">{formattedExpenses}</div>
+      </div>
+      <div className="hud-pill hud-pill-stack">
+        <div className="hud-label">👥 Guests</div>
+        <div className="hud-value">{guests.toLocaleString()}</div>
+      </div>
+      <div className="hud-pill hud-pill-stack">
+        <div className="hud-label">😊 Happiness</div>
+        <div className="hud-value">{happinessBlocks}</div>
       </div>
       <div className="hud-pill">LEVEL ⭐{level}</div>
       <button
