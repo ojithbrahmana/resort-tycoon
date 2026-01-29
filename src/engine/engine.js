@@ -105,6 +105,7 @@ export function createEngine({ container }){
 
   let ghost = null
   let selectionOutline = null
+  let demolishOutline = null
   let mode = "build"
   let selectedTool = "villa"
   let onPlace = null
@@ -158,6 +159,14 @@ export function createEngine({ container }){
       buildGroup.remove(selectionOutline)
       disposeObject(selectionOutline)
       selectionOutline = null
+    }
+  }
+
+  function clearDemolishOutline(){
+    if (demolishOutline) {
+      buildGroup.remove(demolishOutline)
+      disposeObject(demolishOutline)
+      demolishOutline = null
     }
   }
 
@@ -224,6 +233,25 @@ export function createEngine({ container }){
     selectionOutline.position.set(x, groundY + 0.22, z)
     selectionOutline.material.color.setHex(0xf59e0b)
     selectionOutline.userData = { ...selectionOutline.userData, gx, gz, footprint: nextFootprint }
+  }
+
+  function setDemolishOutline({ gx, gz, footprint }){
+    const nextFootprint = footprint ?? { w: 1, h: 1 }
+    if (demolishOutline) {
+      const { w, h } = demolishOutline.userData.footprint ?? { w: 1, h: 1 }
+      if (w !== nextFootprint.w || h !== nextFootprint.h) {
+        buildGroup.remove(demolishOutline)
+        demolishOutline = null
+      }
+    }
+    if (!demolishOutline) {
+      demolishOutline = createFootprintOutline({ ...nextFootprint, color: 0xef4444 })
+      buildGroup.add(demolishOutline)
+    }
+    const { x, z } = getFootprintCenter({ gx, gz }, nextFootprint)
+    demolishOutline.position.set(x, groundY + 0.22, z)
+    demolishOutline.material.color.setHex(0xef4444)
+    demolishOutline.userData = { ...demolishOutline.userData, gx, gz, footprint: nextFootprint }
   }
 
   function getFootprintCells(gx, gz, footprint) {
@@ -776,6 +804,7 @@ export function createEngine({ container }){
   function resetWorld(){
     removeGhost()
     clearSelectionOutline()
+    clearDemolishOutline()
     for (const child of [...buildGroup.children]) {
       buildGroup.remove(child)
       disposeObject(child)
@@ -802,6 +831,8 @@ export function createEngine({ container }){
     clearGhost: removeGhost,
     setSelectionOutline,
     clearSelectionOutline,
+    setDemolishOutline,
+    clearDemolishOutline,
     pickIsland,
     handleMouseMove,
     handleClick,

@@ -33,7 +33,7 @@ function HUD({ money, income, incomeTrend, level, onOpenLoan, perfEnabled, onTog
           onOpenLoan?.()
         }}
       >
-        💰 <span>Loan</span>
+        💰 <span>Get Loan</span>
       </button>
       <button
         className={`hud-pill ${perfEnabled ? "hud-pill-active" : "hud-pill-muted"}`}

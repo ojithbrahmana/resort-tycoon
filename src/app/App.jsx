@@ -10,6 +10,7 @@ import { GRID_HALF, INCOME_TICK_MS, INCOME_XP_INTERVAL_MS, GRASS_RADIUS, SHORE_I
 import { playSound } from "../game/sound"
 import { findPath, findRoadAnchor } from "../game/guests"
 import splashImage from "../assets/ui/splash.png"
+import logoImage from "../assets/ui/urtlogo.png"
 import HUD from "../ui/HUD.jsx"
 import ModeBar from "../ui/ModeBar.jsx"
 import BuildShop from "../ui/BuildShop.jsx"
@@ -235,6 +236,25 @@ export default function App(){
         footprint.forEach(cell => occupied.delete(key(cell.gx, cell.gz)))
         current.handleMouseMove(e, { footprint: item?.footprint, occupiedKeys: occupied })
       }
+      if (modeRef.current === "demolish") {
+        const hit = current.pickIsland?.(e.clientX, e.clientY)
+        if (!hit) {
+          current.clearDemolishOutline?.()
+          return
+        }
+        const { gx, gz } = worldToGrid(hit.x, hit.z)
+        const target = findBuildingAtCell({ gx, gz })
+        if (!target) {
+          current.clearDemolishOutline?.()
+          return
+        }
+        const item = catalogById[target.id]
+        if (!item) {
+          current.clearDemolishOutline?.()
+          return
+        }
+        current.setDemolishOutline?.({ gx: target.gx, gz: target.gz, footprint: item?.footprint })
+      }
     }
     const onMouseDown = (e) => {
       const current = engineRef.current
@@ -316,6 +336,12 @@ export default function App(){
   useEffect(() => {
     if (mode !== "move") {
       clearMoveSelection()
+    }
+  }, [mode])
+
+  useEffect(() => {
+    if (mode !== "demolish") {
+      engineRef.current?.clearDemolishOutline?.()
     }
   }, [mode])
 
@@ -616,6 +642,16 @@ export default function App(){
         return "Tile already occupied."
       }
     }
+    if (item?.id === "palm") {
+      for (const building of buildingsRef.current) {
+        if (building.id !== "palm") continue
+        const dx = Math.abs(building.gx - gx)
+        const dz = Math.abs(building.gz - gz)
+        if (Math.max(dx, dz) <= 1) {
+          return "Leave space between palms."
+        }
+      }
+    }
     if (levelRef.current < item.unlockLevel) {
       return `Unlocks at Level ${item.unlockLevel}.`
     }
@@ -786,6 +822,7 @@ export default function App(){
     eng.removePlacedObject(target.object)
     setBuildings(prev => prev.filter(b => b.uid !== target.uid))
     clearMoveSelection()
+    eng.clearDemolishOutline?.()
   }
 
   function handleDragPlacement({ gx, gz }){
@@ -833,6 +870,7 @@ export default function App(){
   }, [])
 
   const splashVisible = splashPhase !== "done"
+  const showLogo = tutorialDismissed || !tutorialVisible
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -933,6 +971,11 @@ export default function App(){
       )}
 
       <div className="ui">
+        {showLogo && (
+          <div className="hud-logo">
+            <img src={logoImage} alt="Resort Tycoon" />
+          </div>
+        )}
         <HUD
           money={moneyDisplayState}
           income={incomeDisplayState}
@@ -1021,7 +1064,10 @@ export default function App(){
               </div>
             ) : (
               <div className="loan-options">
-                {LOAN_OPTIONS.map(option => (
+                {LOAN_OPTIONS.map(option => {
+                  const totalOwed = Math.round(option.principal * (1 + option.rate))
+                  const paymentPerSecond = totalOwed / LOAN_DURATION_SEC
+                  return (
                   <button
                     key={option.principal}
                     className="loan-card"
@@ -1034,8 +1080,10 @@ export default function App(){
                   >
                     <div>${option.principal.toLocaleString()}</div>
                     <small>@ {Math.round(option.rate * 100)}%</small>
+                    <small>-${paymentPerSecond.toFixed(2)} / sec</small>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

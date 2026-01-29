@@ -89,7 +89,7 @@ function loadVillaModel() {
     const size = new THREE.Vector3()
     bounds.getSize(size)
     const footprint = Math.max(size.x, size.z) || 1
-    const targetFootprint = GRID_SIZE * 4
+    const targetFootprint = GRID_SIZE * 2
     villaScaleFactor = targetFootprint / footprint
     return villaModel
   })
